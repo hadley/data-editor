@@ -1,0 +1,23 @@
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+build/
+*.log
+.env*
+coverage/
+
+# Tauri / Rust
+src-tauri/target/
+**/*.rs.bk
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+
+# Tauri generated schemas
+src-tauri/gen/

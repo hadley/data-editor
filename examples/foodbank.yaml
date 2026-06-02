@@ -1,0 +1,30 @@
+name: foodbank_visits
+columns:
+  - name: client_id
+    type: number
+    subtype: id
+    primary_key: true
+  - name: name
+    type: string
+    required: true
+    examples: [Jane Doe, John Smith]
+  - name: visits
+    type: number
+    subtype: ordinal
+    range: { min: 0 }
+  - name: meals
+    type: number
+    subtype: quantity
+    range: { min: 0 }
+  - name: active
+    type: boolean
+  - name: signup_date
+    type: date
+  - name: last_seen
+    type: datetime
+  - name: status
+    type: enum
+    values: { A: Active, I: Inactive }
+  - name: region
+    type: enum
+    values: [north, south, east, west]
