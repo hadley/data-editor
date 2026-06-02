@@ -189,7 +189,7 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 
 - **SC-001**: A matched data-file-and-dictionary pair opens into an editable grid, and 100% of column names, types, categorical values, large-integer values, and date/time-with-timezone values are identical after an open → save → reopen round-trip with no edits.
 - **SC-002**: Every mismatched pair is rejected before the grid opens, with a message that names the specific differing columns and/or the first incompatible column's expected and found types — 0% of mismatched pairs open into the grid.
-- **SC-003**: Invalid values entered during editing are flagged within a moment of entry (perceived as immediate) while remaining editable, and the outstanding-violations count always reflects the current number of flagged cells.
+- **SC-003**: Invalid values entered during editing are flagged while remaining editable — per-cell rules (type, range, required, allowed values) immediately, and cross-row rules (unique, primary key) within a short debounce after typing pauses — and the outstanding-violations count reflects the current number of flagged cells once validation settles.
 - **SC-004**: The tool never writes a file with outstanding violations without an explicit user confirmation — 0% of violation-bearing saves occur silently.
 - **SC-005**: A user familiar with spreadsheets can complete a representative editing task (open, change several cells across types, add a row, fix flagged cells, save) without instructions on first attempt.
 - **SC-006**: The grid remains responsive (scrolling and editing feel immediate, and live validation keeps up) on datasets of approximately 10,000 rows.

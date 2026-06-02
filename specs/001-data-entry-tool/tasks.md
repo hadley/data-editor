@@ -71,9 +71,9 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Implement `toColumns(columns): GridColumn[]` (Text/Number/Checkbox/Date/Date-time/Dropdown cell kinds) in `src/schema/toColumns.ts` — make T017 pass
-- [ ] T020 [US1] Implement the grid component (Glide Data Grid: virtualized, click-to-edit, add-row) bound to the workbook in `src/grid/DataGrid.tsx`
-- [ ] T021 [US1] Implement happy-path load (read Parquet + parse dict → workbook → grid, columns in dictionary order) in `src/App.tsx` / `src/state/workbook.ts`
+- [ ] T019 [US1] Implement `toColumns(columns): GridColumn[]` (Text/Number/Checkbox/Date/Date-time/Dropdown cell kinds; `string` columns surface `examples` as a placeholder/hint, FR-008) in `src/schema/toColumns.ts` — make T017 pass
+- [ ] T020 [US1] Implement the grid component (Glide Data Grid: virtualized, click-to-edit, add-row) bound to the workbook, with touch-friendly hit targets for tablet (FR-027), in `src/grid/DataGrid.tsx`
+- [ ] T021 [US1] Implement happy-path load (read Parquet + parse dict → workbook → grid, columns in dictionary order; a valid empty dataset opens as an editable grid with the correct columns) in `src/App.tsx` / `src/state/workbook.ts`
 - [ ] T022 [US1] Implement enum cell behavior (dropdown shows label, stores key) and id-as-opaque (no aggregation) in `src/grid/DataGrid.tsx` + `src/schema/toColumns.ts`
 - [ ] T023 [US1] Implement BigInt (Int64) and timezone-aware datetime cell editing/rendering fidelity in `src/grid/DataGrid.tsx`
 - [ ] T024 [US1] Implement save flow (workbook → `writeParquet` → `platform/files.save` in-place; clears `dirty`) in `src/App.tsx`
@@ -145,7 +145,7 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 - [ ] T042 [US4] Implement the command-history stack (`apply`/`invert`, undo/redo) in `src/grid/history.ts` — make T041 pass
 - [ ] T043 [US4] Route all grid mutations through commands and wire undo/redo in `src/grid/DataGrid.tsx` + `src/state/workbook.ts`
 - [ ] T044 [P] [US4] Configure keyboard navigation (Tab/Enter/arrows) in `src/grid/DataGrid.tsx`
-- [ ] T045 [US4] Implement copy/paste incl. Excel/Sheets clipboard (Tauri clipboard plugin + Glide paste) in `src/grid/DataGrid.tsx`
+- [ ] T045 [US4] Implement copy/paste incl. Excel/Sheets clipboard (Tauri clipboard plugin + Glide paste), with predictable handling when the pasted block does not fit the selection (place from the active cell, clip/extend consistently), in `src/grid/DataGrid.tsx`
 - [ ] T046 [P] [US4] Implement fill-down across a selection in `src/grid/DataGrid.tsx`
 - [ ] T047 [P] [US4] Implement frozen panes (header row + leading key columns) in `src/grid/DataGrid.tsx`
 - [ ] T048 [US4] Write integration test exercising paste + fill-down + undo/redo in `tests/integration/conveniences.test.ts`
@@ -179,7 +179,7 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 **Purpose**: Cross-cutting requirements, performance, and packaging.
 
-- [ ] T054 [P] [US3-ext] Display `foreign_key` constraints as informational (not enforced) in the grid/header (FR-013) in `src/grid/DataGrid.tsx`
+- [ ] T054 [P] Display `foreign_key` constraints as informational (not enforced) in the grid/header (FR-013) in `src/grid/DataGrid.tsx`
 - [ ] T055 Verify responsiveness at ~10,000 rows (scroll, edit, debounced validation) against SC-006; record results
 - [ ] T056 [P] WKWebView smoke test under `npm run tauri dev`: Glide grid rendering + Excel/Sheets clipboard paste (research R12)
 - [ ] T057 macOS packaging: code signing + notarization config and `.parquet` "Open With" association in `src-tauri/tauri.conf.json`
