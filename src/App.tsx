@@ -4,15 +4,19 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { parse } from "./schema/parse.ts";
 import { toColumns } from "./schema/toColumns.ts";
+import { reconcile } from "./schema/reconcile.ts";
 import { readParquet } from "./io/readParquet.ts";
 import { writeParquet } from "./io/writeParquet.ts";
 import { openFiles, saveBytes, type SaveOrigin } from "./platform/files.ts";
 import { Workbook } from "./state/workbook.ts";
 import { DataGrid } from "./grid/DataGrid.tsx";
+import { ReconcileError } from "./grid/ReconcileError.tsx";
+import type { ReconcileResult } from "./schema/types.ts";
 
 export function App() {
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
   const [origin, setOrigin] = useState<SaveOrigin | null>(null);
+  const [reconcileError, setReconcileError] = useState<ReconcileResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
   const unsubscribe = useRef<(() => void) | null>(null);
@@ -38,11 +42,18 @@ export function App() {
 
   const handleOpen = useCallback(async () => {
     setError(null);
+    setReconcileError(null);
     try {
       const files = await openFiles();
       const dict = parse(files.dict);
-      const { rows } = await readParquet(files.parquet);
-      // Happy-path load (US1) — reconciliation gate is US2.
+      const { schemaElements, rows } = await readParquet(files.parquet);
+      // Reconciliation gate (US2): block opening on any mismatch (FR-003–FR-007).
+      const result = reconcile(schemaElements, dict);
+      if (!result.ok) {
+        setWorkbook(null);
+        setReconcileError(result);
+        return;
+      }
       setWorkbook(new Workbook(dict, rows));
       setOrigin(files.origin);
     } catch (err) {
@@ -85,6 +96,8 @@ export function App() {
       <main style={{ flex: 1, minHeight: 0 }}>
         {workbook ? (
           <DataGrid columns={columns} rows={workbook.rows} onEdit={(r, c, v) => workbook.setCell(r, c, v)} />
+        ) : reconcileError ? (
+          <ReconcileError result={reconcileError} onDismiss={() => setReconcileError(null)} />
         ) : (
           <p style={{ padding: 16, color: "#666" }}>
             Open a Parquet file and its <code>data-dict.yaml</code> to begin.

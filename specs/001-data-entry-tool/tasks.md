@@ -92,14 +92,14 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 ### Tests for User Story 2
 
-- [ ] T027 [P] [US2] Write failing unit tests for `reconcile` (missing/extra by name; first type mismatch expected+found; order-insensitive ⇒ ok) in `tests/schema/reconcile.test.ts`
-- [ ] T028 [P] [US2] Write failing integration test that mismatched pairs do not open and matching-but-reordered pairs do in `tests/integration/reconcile.test.ts`
+- [x] T027 [P] [US2] Write failing unit tests for `reconcile` (missing/extra by name; first type mismatch expected+found; order-insensitive ⇒ ok) in `tests/schema/reconcile.test.ts`
+- [x] T028 [P] [US2] Write failing integration test that mismatched pairs do not open and matching-but-reordered pairs do in `tests/integration/reconcile.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Implement `reconcile(parquetSchema, dict): ReconcileResult` in `src/schema/reconcile.ts` — make T027 pass
-- [ ] T030 [US2] Gate the load flow on `reconcile` before rendering the grid (block on `!ok`) in `src/App.tsx`
-- [ ] T031 [US2] Implement the reconciliation error screen (lists missing/extra columns and the first type mismatch) in `src/grid/` (e.g. `src/grid/ReconcileError.tsx`) — make T028 pass
+- [x] T029 [US2] Implement `reconcile(parquetSchema, dict): ReconcileResult` in `src/schema/reconcile.ts` — make T027 pass
+- [x] T030 [US2] Gate the load flow on `reconcile` before rendering the grid (block on `!ok`) in `src/App.tsx`
+- [x] T031 [US2] Implement the reconciliation error screen (lists missing/extra columns and the first type mismatch) in `src/grid/` (e.g. `src/grid/ReconcileError.tsx`) — make T028 pass
 
 **Checkpoint**: US1 + US2 both work independently; mismatches are blocked with clear messages.
 
