@@ -4,7 +4,14 @@
 import { toArrow } from "../schema/toArrow.ts";
 import { toValidators, type Validators } from "../schema/toValidators.ts";
 import { cellKey, computeCellViolations, indexTableViolations } from "../grid/cellValidation.ts";
+import { CommandStack } from "../grid/history.ts";
 import type { ArrowSchema, CellValue, DataDict, Row, Violation } from "../schema/types.ts";
+
+export interface CellEdit {
+  row: number;
+  col: string;
+  value: CellValue;
+}
 
 export class Workbook {
   readonly dict: DataDict;
@@ -19,6 +26,7 @@ export class Workbook {
   /** Cross-row (unique/pk) violations — recomputed debounced (R8). */
   private tableViolations: Violation[];
   private tableIndex: Map<string, Violation>;
+  private readonly history = new CommandStack();
 
   private listeners = new Set<() => void>();
 
@@ -44,21 +52,68 @@ export class Workbook {
     for (const fn of this.listeners) fn();
   }
 
-  /** Edit a single cell; revalidates that cell immediately (per-cell rules). */
+  /** Edit a single cell; revalidates that cell immediately (per-cell rules). Undoable. */
   setCell(row: number, col: string, value: CellValue): void {
     if (row < 0 || row >= this.rows.length) return;
-    this.rows = this.rows.map((r, i) => (i === row ? { ...r, [col]: value } : r));
-    this.revalidateCell(row, col, value);
+    const prev = this.rows[row]?.[col] ?? null;
+    this.history.push({
+      kind: "setCell",
+      apply: () => this.applyCellValue(row, col, value),
+      invert: () => this.applyCellValue(row, col, prev),
+    });
+    this.notify(true);
+  }
+
+  /** Apply many edits as one undoable unit (paste / fill-down). */
+  setCells(edits: CellEdit[]): void {
+    const valid = edits.filter((e) => e.row >= 0 && e.row < this.rows.length);
+    if (valid.length === 0) return;
+    const prev = valid.map((e) => ({ ...e, value: this.rows[e.row]?.[e.col] ?? null }));
+    this.history.push({
+      kind: "paste",
+      apply: () => valid.forEach((e) => this.applyCellValue(e.row, e.col, e.value)),
+      invert: () => prev.forEach((e) => this.applyCellValue(e.row, e.col, e.value)),
+    });
     this.notify(true);
   }
 
   addRow(): void {
-    const blank: Row = {};
-    for (const c of this.dict.columns) blank[c.name] = null;
     const index = this.rows.length;
-    this.rows = [...this.rows, blank];
-    for (const c of this.dict.columns) this.revalidateCell(index, c.name, null);
+    this.history.push({
+      kind: "addRow",
+      apply: () => {
+        const blank: Row = {};
+        for (const c of this.dict.columns) blank[c.name] = null;
+        this.rows = [...this.rows, blank];
+        for (const c of this.dict.columns) this.revalidateCell(index, c.name, null);
+      },
+      invert: () => {
+        this.rows = this.rows.slice(0, index);
+        for (const c of this.dict.columns) this.cellViolations.delete(cellKey(index, c.name));
+      },
+    });
     this.notify(true);
+  }
+
+  undo(): void {
+    if (this.history.undo()) this.notify(true);
+  }
+
+  redo(): void {
+    if (this.history.redo()) this.notify(true);
+  }
+
+  canUndo(): boolean {
+    return this.history.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this.history.canRedo();
+  }
+
+  private applyCellValue(row: number, col: string, value: CellValue): void {
+    this.rows = this.rows.map((r, i) => (i === row ? { ...r, [col]: value } : r));
+    this.revalidateCell(row, col, value);
   }
 
   private revalidateCell(row: number, col: string, value: CellValue): void {

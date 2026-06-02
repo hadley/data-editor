@@ -77,6 +77,42 @@ export function App() {
     [workbook, scheduleTable],
   );
 
+  const handleEditCells = useCallback(
+    (edits: { row: number; col: string; value: CellValue }[]) => {
+      workbook?.setCells(edits);
+      scheduleTable();
+    },
+    [workbook, scheduleTable],
+  );
+
+  const handleUndo = useCallback(() => {
+    workbook?.undo();
+    scheduleTable();
+  }, [workbook, scheduleTable]);
+
+  const handleRedo = useCallback(() => {
+    workbook?.redo();
+    scheduleTable();
+  }, [workbook, scheduleTable]);
+
+  // Keyboard undo/redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z or Ctrl+Y).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!workbook) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
+      } else if (mod && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [workbook, handleUndo, handleRedo]);
+
   const handleSave = useCallback(async () => {
     if (!workbook || !origin) return;
     setError(null);
@@ -110,6 +146,12 @@ export function App() {
         <button onClick={() => workbook?.addRow()} disabled={!workbook}>
           Add row
         </button>
+        <button onClick={handleUndo} disabled={!workbook?.canUndo()}>
+          Undo
+        </button>
+        <button onClick={handleRedo} disabled={!workbook?.canRedo()}>
+          Redo
+        </button>
         <button onClick={handleSave} disabled={!workbook}>
           Save{workbook?.dirty ? " *" : ""}
         </button>
@@ -132,6 +174,7 @@ export function App() {
             columns={columns}
             rows={workbook.rows}
             onEdit={handleEdit}
+            onEditCells={handleEditCells}
             cellIssue={(r, c) => workbook.cellIssue(r, c)}
             onHover={setHoverMsg}
           />

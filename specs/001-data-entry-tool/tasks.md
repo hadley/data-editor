@@ -138,17 +138,17 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 ### Tests for User Story 4
 
-- [ ] T041 [P] [US4] Write failing unit tests for the undo/redo command stack (setCell, addRow, paste, fillDown invert correctly) in `tests/grid/history.test.ts`
+- [x] T041 [P] [US4] Write failing unit tests for the undo/redo command stack (setCell, addRow, paste, fillDown invert correctly) in `tests/grid/history.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T042 [US4] Implement the command-history stack (`apply`/`invert`, undo/redo) in `src/grid/history.ts` — make T041 pass
-- [ ] T043 [US4] Route all grid mutations through commands and wire undo/redo in `src/grid/DataGrid.tsx` + `src/state/workbook.ts`
-- [ ] T044 [P] [US4] Configure keyboard navigation (Tab/Enter/arrows) in `src/grid/DataGrid.tsx`
-- [ ] T045 [US4] Implement copy/paste incl. Excel/Sheets clipboard (Tauri clipboard plugin + Glide paste), with predictable handling when the pasted block does not fit the selection (place from the active cell, clip/extend consistently), in `src/grid/DataGrid.tsx`
-- [ ] T046 [P] [US4] Implement fill-down across a selection in `src/grid/DataGrid.tsx`
-- [ ] T047 [P] [US4] Implement frozen panes (header row + leading key columns) in `src/grid/DataGrid.tsx`
-- [ ] T048 [US4] Write integration test exercising paste + fill-down + undo/redo in `tests/integration/conveniences.test.ts`
+- [x] T042 [US4] Implement the command-history stack (`apply`/`invert`, undo/redo) in `src/grid/history.ts` — make T041 pass
+- [x] T043 [US4] Route all grid mutations through commands and wire undo/redo in `src/grid/DataGrid.tsx` + `src/state/workbook.ts`
+- [x] T044 [P] [US4] Configure keyboard navigation (Tab/Enter/arrows) in `src/grid/DataGrid.tsx`
+- [x] T045 [US4] Implement copy/paste incl. Excel/Sheets clipboard (Tauri clipboard plugin + Glide paste), with predictable handling when the pasted block does not fit the selection (place from the active cell, clip/extend consistently), in `src/grid/DataGrid.tsx`
+- [x] T046 [P] [US4] Implement fill-down across a selection in `src/grid/DataGrid.tsx`
+- [x] T047 [P] [US4] Implement frozen panes (header row + leading key columns) in `src/grid/DataGrid.tsx`
+- [x] T048 [US4] Write integration test exercising paste + fill-down + undo/redo in `tests/integration/conveniences.test.ts`
 
 **Checkpoint**: US1–US4 work independently; sustained data entry is practical.
 
