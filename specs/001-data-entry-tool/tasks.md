@@ -113,18 +113,18 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 ### Tests for User Story 3
 
-- [ ] T032 [P] [US3] Write failing unit tests for `toValidators` (per-cell: type/range/required/enum membership; table-level: unique + primary-key tuple uniqueness) in `tests/schema/toValidators.test.ts`
-- [ ] T033 [P] [US3] Write failing integration test that invalid values are flagged-not-blocked and the count updates in `tests/integration/validation.test.ts`
+- [x] T032 [P] [US3] Write failing unit tests for `toValidators` (per-cell: type/range/required/enum membership; table-level: unique + primary-key tuple uniqueness) in `tests/schema/toValidators.test.ts`
+- [x] T033 [P] [US3] Write failing integration test that invalid values are flagged-not-blocked and the count updates in `tests/integration/validation.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Implement `toValidators(columns)` (Zod per-cell + table-level fn) in `src/schema/toValidators.ts` — make T032 pass
-- [ ] T035 [US3] Implement cell validation binding (immediate per-cell; produce/aggregate `Violation`s into the workbook) in `src/grid/cellValidation.ts`
-- [ ] T036 [US3] Implement debounced cross-row uniqueness / primary-key pass in `src/state/workbook.ts` (research R8)
-- [ ] T037 [US3] Implement invalid-cell highlight + per-cell message on focus/hover in `src/grid/DataGrid.tsx`
-- [ ] T038 [US3] Implement the outstanding-violations summary count UI in `src/App.tsx`
-- [ ] T039 [US3] Implement save warn + explicit confirm when violations remain (FR-020) in `src/App.tsx`
-- [ ] T040 [US3] Verify T033 passes end-to-end
+- [x] T034 [US3] Implement `toValidators(columns)` (Zod per-cell + table-level fn) in `src/schema/toValidators.ts` — make T032 pass
+- [x] T035 [US3] Implement cell validation binding (immediate per-cell; produce/aggregate `Violation`s into the workbook) in `src/grid/cellValidation.ts`
+- [x] T036 [US3] Implement debounced cross-row uniqueness / primary-key pass in `src/state/workbook.ts` (research R8)
+- [x] T037 [US3] Implement invalid-cell highlight + per-cell message on focus/hover in `src/grid/DataGrid.tsx`
+- [x] T038 [US3] Implement the outstanding-violations summary count UI in `src/App.tsx`
+- [x] T039 [US3] Implement save warn + explicit confirm when violations remain (FR-020) in `src/App.tsx`
+- [x] T040 [US3] Verify T033 passes end-to-end
 
 **Checkpoint**: US1–US3 work independently; live validation guides without blocking.
 

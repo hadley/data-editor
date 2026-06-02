@@ -8,22 +8,29 @@ import {
   type EditableGridCell,
   type GridCell,
   type GridColumn,
+  type GridMouseEventArgs,
   type Item,
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { type GridColumnDef } from "../schema/toColumns.ts";
-import type { CellValue, Row } from "../schema/types.ts";
+import type { CellValue, Row, Violation } from "../schema/types.ts";
 import { fromGridCell, toGridCell } from "./cellMapping.ts";
 
 interface Props {
   columns: GridColumnDef[];
   rows: Row[];
   onEdit: (row: number, col: string, value: CellValue) => void;
+  /** Look up a validation issue for a cell (US3); invalid cells are highlighted. */
+  cellIssue?: (row: number, col: string) => Violation | null;
+  /** Notified with a cell's validation message on hover (FR-017). */
+  onHover?: (message: string | null) => void;
   /** Freeze the header (always) plus this many leading key columns. */
   freezeColumns?: number;
 }
 
-export function DataGrid({ columns, rows, onEdit, freezeColumns = 1 }: Props) {
+const INVALID_BG = "#ffe5e5";
+
+export function DataGrid({ columns, rows, onEdit, cellIssue, onHover, freezeColumns = 1 }: Props) {
   const gridColumns: GridColumn[] = useMemo(
     () => columns.map((c) => ({ title: c.title, id: c.name, width: 160 })),
     [columns],
@@ -34,9 +41,13 @@ export function DataGrid({ columns, rows, onEdit, freezeColumns = 1 }: Props) {
       const [colIdx, rowIdx] = cell;
       const def = columns[colIdx];
       const value = rows[rowIdx]?.[def.name] ?? null;
-      return toGridCell(def, value);
+      const base = toGridCell(def, value);
+      if (cellIssue?.(rowIdx, def.name)) {
+        return { ...base, themeOverride: { bgCell: INVALID_BG } };
+      }
+      return base;
     },
-    [columns, rows],
+    [columns, rows, cellIssue],
   );
 
   const onCellEdited = useCallback(
@@ -48,12 +59,28 @@ export function DataGrid({ columns, rows, onEdit, freezeColumns = 1 }: Props) {
     [columns, onEdit],
   );
 
+  const onItemHovered = useCallback(
+    (args: GridMouseEventArgs) => {
+      if (!onHover) return;
+      if (args.kind !== "cell") {
+        onHover(null);
+        return;
+      }
+      const [colIdx, rowIdx] = args.location;
+      const def = columns[colIdx];
+      const issue = def ? cellIssue?.(rowIdx, def.name) : null;
+      onHover(issue ? issue.message : null);
+    },
+    [columns, cellIssue, onHover],
+  );
+
   return (
     <DataEditor
       columns={gridColumns}
       rows={rows.length}
       getCellContent={getCellContent}
       onCellEdited={onCellEdited}
+      onItemHovered={onItemHovered}
       rowMarkers="number"
       freezeColumns={Math.min(freezeColumns, columns.length)}
       width="100%"
