@@ -28,10 +28,10 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 **Purpose**: Project initialization and toolchain
 
-- [ ] T001 Scaffold Vite + React + TypeScript app and create the directory tree (`src/schema/`, `src/grid/`, `src/cards/`, `src/io/`, `src/state/`, `src/platform/`, `tests/`, `examples/`) per plan.md
-- [ ] T002 Install runtime dependencies (`@glideapps/glide-data-grid`, `hyparquet`, `hyparquet-writer`, `js-yaml`, `zod`) and dev dependencies (`vitest`, `@testing-library/react`, `@testing-library/user-event`) in `package.json`
-- [ ] T003 [P] Configure ESLint + Prettier and a Vitest config in `vitest.config.ts` / `.eslintrc`
-- [ ] T004 [P] Initialize the Tauri shell: `src-tauri/` with `tauri.conf.json` (window, `.parquet` file association) and add the `fs`, `dialog`, and `clipboard-manager` plugins in `src-tauri/Cargo.toml`
+- [x] T001 Scaffold Vite + React + TypeScript app and create the directory tree (`src/schema/`, `src/grid/`, `src/cards/`, `src/io/`, `src/state/`, `src/platform/`, `tests/`, `examples/`) per plan.md
+- [x] T002 Install runtime dependencies (`@glideapps/glide-data-grid`, `hyparquet`, `hyparquet-writer`, `js-yaml`, `zod`) and dev dependencies (`vitest`, `@testing-library/react`, `@testing-library/user-event`) in `package.json`
+- [x] T003 [P] Configure ESLint + Prettier and a Vitest config in `vitest.config.ts` / `.eslintrc`
+- [x] T004 [P] Initialize the Tauri shell: `src-tauri/` with `tauri.conf.json` (window, `.parquet` file association) and add the `fs`, `dialog`, and `clipboard-manager` plugins in `src-tauri/Cargo.toml`
 
 ---
 
@@ -41,18 +41,18 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 [P] Define shared types (`DataDict`, `Column`, `DictType`, `EnumValue`, `ForeignKeyRef`, `Row`, `CellValue`, `CellRef`, `ReconcileResult`, `Violation`, `Command`) in `src/schema/types.ts` per data-model.md
-- [ ] T006 [P] Create the round-trip fixture: `examples/foodbank.yaml` (covering all 8 dictionary types incl. enum list+map, datetime, Int64 id) and generate `examples/foodbank.parquet` from it
-- [ ] T007 [P] Write failing unit tests for `parse` (enum list↔map normalization, `primary_key`⇒required+unique, error on unknown type / missing values) in `tests/schema/parse.test.ts`
-- [ ] T008 Implement `parse(yamlText): DataDict` in `src/schema/parse.ts` (js-yaml → normalized `Column[]`) — make T007 pass
-- [ ] T009 [P] Write failing unit tests for `toArrow` (type-table mapping incl. id→Utf8 default, Int64, Timestamp(µs,tz), Dictionary enum) in `tests/schema/toArrow.test.ts`
-- [ ] T010 Implement `toArrow(columns): ArrowSchema` in `src/schema/toArrow.ts` — make T009 pass
-- [ ] T011 [P] Write the failing Milestone-0 round-trip integration test (parse → toArrow → write → read → deep-equal; assert BigInt/Int64, enum dictionary keys, datetime+tz survive) in `tests/integration/roundtrip.test.ts`
-- [ ] T012 Implement `readParquet(file): { schema, rows }` in `src/io/readParquet.ts` (Int64→bigint, Timestamp→instant+zone, Dictionary→key) per contracts/core-functions.md
-- [ ] T013 Implement `writeParquet(rows, schema): Uint8Array` in `src/io/writeParquet.ts` (lossless per FR-021) — make T011 pass; if a type can't be expressed, escalate to parquet-wasm per research R2
-- [ ] T014 Implement the save/open boundary `openFiles()` / `save(bytes, origin)` in `src/platform/files.ts` with Tauri filesystem (desktop) + File-System-Access/re-export fallback (browser) per research R5/R12
-- [ ] T015 [P] Implement the shared workbook model (`rows`, `dirty`, `violations`, `history` refs) in `src/state/workbook.ts` per data-model.md
-- [ ] T016 Implement the app shell + entrypoint (`src/App.tsx`, `src/main.tsx`) with file-open wiring and the grid/card responsive switch stub
+- [x] T005 [P] Define shared types (`DataDict`, `Column`, `DictType`, `EnumValue`, `ForeignKeyRef`, `Row`, `CellValue`, `CellRef`, `ReconcileResult`, `Violation`, `Command`) in `src/schema/types.ts` per data-model.md
+- [x] T006 [P] Create the round-trip fixture: `examples/foodbank.yaml` (covering all 8 dictionary types incl. enum list+map, datetime, Int64 id) and generate `examples/foodbank.parquet` from it
+- [x] T007 [P] Write failing unit tests for `parse` (enum list↔map normalization, `primary_key`⇒required+unique, error on unknown type / missing values) in `tests/schema/parse.test.ts`
+- [x] T008 Implement `parse(yamlText): DataDict` in `src/schema/parse.ts` (js-yaml → normalized `Column[]`) — make T007 pass
+- [x] T009 [P] Write failing unit tests for `toArrow` (type-table mapping incl. id→Utf8 default, Int64, Timestamp(µs,tz), Dictionary enum) in `tests/schema/toArrow.test.ts`
+- [x] T010 Implement `toArrow(columns): ArrowSchema` in `src/schema/toArrow.ts` — make T009 pass
+- [x] T011 [P] Write the failing Milestone-0 round-trip integration test (parse → toArrow → write → read → deep-equal; assert BigInt/Int64, enum dictionary keys, datetime+tz survive) in `tests/integration/roundtrip.test.ts`
+- [x] T012 Implement `readParquet(file): { schema, rows }` in `src/io/readParquet.ts` (Int64→bigint, Timestamp→instant+zone, Dictionary→key) per contracts/core-functions.md
+- [x] T013 Implement `writeParquet(rows, schema): Uint8Array` in `src/io/writeParquet.ts` (lossless per FR-021) — make T011 pass; if a type can't be expressed, escalate to parquet-wasm per research R2
+- [x] T014 Implement the save/open boundary `openFiles()` / `save(bytes, origin)` in `src/platform/files.ts` with Tauri filesystem (desktop) + File-System-Access/re-export fallback (browser) per research R5/R12
+- [x] T015 [P] Implement the shared workbook model (`rows`, `dirty`, `violations`, `history` refs) in `src/state/workbook.ts` per data-model.md
+- [x] T016 Implement the app shell + entrypoint (`src/App.tsx`, `src/main.tsx`) with file-open wiring and the grid/card responsive switch stub
 
 **Checkpoint**: Consistency core proven by the round-trip test — user stories can now begin.
 
@@ -66,19 +66,19 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 ### Tests for User Story 1
 
-- [ ] T017 [P] [US1] Write failing unit tests for `toColumns` (cell kind per type; enum dropdown options show label / store value) in `tests/schema/toColumns.test.ts`
-- [ ] T018 [P] [US1] Write failing integration test for the load→edit→add-row→save→reopen lossless cycle in `tests/integration/edit-save.test.ts`
+- [x] T017 [P] [US1] Write failing unit tests for `toColumns` (cell kind per type; enum dropdown options show label / store value) in `tests/schema/toColumns.test.ts`
+- [x] T018 [P] [US1] Write failing integration test for the load→edit→add-row→save→reopen lossless cycle in `tests/integration/edit-save.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Implement `toColumns(columns): GridColumn[]` (Text/Number/Checkbox/Date/Date-time/Dropdown cell kinds; `string` columns surface `examples` as a placeholder/hint, FR-008) in `src/schema/toColumns.ts` — make T017 pass
-- [ ] T020 [US1] Implement the grid component (Glide Data Grid: virtualized, click-to-edit, add-row) bound to the workbook, with touch-friendly hit targets for tablet (FR-027), in `src/grid/DataGrid.tsx`
-- [ ] T021 [US1] Implement happy-path load (read Parquet + parse dict → workbook → grid, columns in dictionary order; a valid empty dataset opens as an editable grid with the correct columns) in `src/App.tsx` / `src/state/workbook.ts`
-- [ ] T022 [US1] Implement enum cell behavior (dropdown shows label, stores key) and id-as-opaque (no aggregation) in `src/grid/DataGrid.tsx` + `src/schema/toColumns.ts`
-- [ ] T023 [US1] Implement BigInt (Int64) and timezone-aware datetime cell editing/rendering fidelity in `src/grid/DataGrid.tsx`
-- [ ] T024 [US1] Implement save flow (workbook → `writeParquet` → `platform/files.save` in-place; clears `dirty`) in `src/App.tsx`
-- [ ] T025 [US1] Implement the unsaved-edit guard (warn before close/reload/open-new when `dirty`, FR-019a) in `src/App.tsx` / `src/platform/files.ts`
-- [ ] T026 [US1] Verify T018 passes end-to-end (load→edit→add→save→reopen lossless)
+- [x] T019 [US1] Implement `toColumns(columns): GridColumn[]` (Text/Number/Checkbox/Date/Date-time/Dropdown cell kinds; `string` columns surface `examples` as a placeholder/hint, FR-008) in `src/schema/toColumns.ts` — make T017 pass
+- [x] T020 [US1] Implement the grid component (Glide Data Grid: virtualized, click-to-edit, add-row) bound to the workbook, with touch-friendly hit targets for tablet (FR-027), in `src/grid/DataGrid.tsx`
+- [x] T021 [US1] Implement happy-path load (read Parquet + parse dict → workbook → grid, columns in dictionary order; a valid empty dataset opens as an editable grid with the correct columns) in `src/App.tsx` / `src/state/workbook.ts`
+- [x] T022 [US1] Implement enum cell behavior (dropdown shows label, stores key) and id-as-opaque (no aggregation) in `src/grid/DataGrid.tsx` + `src/schema/toColumns.ts`
+- [x] T023 [US1] Implement BigInt (Int64) and timezone-aware datetime cell editing/rendering fidelity in `src/grid/DataGrid.tsx`
+- [x] T024 [US1] Implement save flow (workbook → `writeParquet` → `platform/files.save` in-place; clears `dirty`) in `src/App.tsx`
+- [x] T025 [US1] Implement the unsaved-edit guard (warn before close/reload/open-new when `dirty`, FR-019a) in `src/App.tsx` / `src/platform/files.ts`
+- [x] T026 [US1] Verify T018 passes end-to-end (load→edit→add→save→reopen lossless)
 
 **Checkpoint**: MVP — a matching pair can be opened, edited, and saved with lossless round-trip.
 

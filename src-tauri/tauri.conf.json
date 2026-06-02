@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Data Entry Tool",
+  "version": "0.1.0",
+  "identifier": "com.dataeditor.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Data Entry Tool",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 360
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "dmg",
+    "icon": ["icons/icon.icns"],
+    "fileAssociations": [
+      {
+        "ext": ["parquet"],
+        "name": "Parquet Data",
+        "role": "Editor"
+      }
+    ]
+  },
+  "plugins": {
+    "fs": {
+      "requireLiteralLeadingDot": false
+    }
+  }
+}
