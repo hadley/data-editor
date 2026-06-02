@@ -7,7 +7,8 @@ export default defineConfig({
   plugins: [react()],
   // Tauri expects a fixed port and does not clear the screen on dev (R12).
   clearScreen: false,
-  server: { port: 1420, strictPort: false },
+  // Tauri's devUrl points at 1420, so the port must be exact.
+  server: { port: 1420, strictPort: true },
   test: {
     globals: true,
     environment: "node",
