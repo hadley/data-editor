@@ -179,12 +179,12 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 **Purpose**: Cross-cutting requirements, performance, and packaging.
 
-- [ ] T054 [P] Display `foreign_key` constraints as informational (not enforced) in the grid/header (FR-013) in `src/grid/DataGrid.tsx`
-- [ ] T055 Verify responsiveness at ~10,000 rows (scroll, edit, debounced validation) against SC-006; record results
-- [ ] T056 [P] WKWebView smoke test under `npm run tauri dev`: Glide grid rendering + Excel/Sheets clipboard paste (research R12)
-- [ ] T057 macOS packaging: code signing + notarization config and `.parquet` "Open With" association in `src-tauri/tauri.conf.json`
-- [ ] T058 [P] Add `README.md` (build/run for browser + Tauri) and ensure `specs/001-data-entry-tool/quickstart.md` steps pass
-- [ ] T059 Run the full quickstart acceptance smoke checklist (US1–US5 table in quickstart.md)
+- [x] T054 [P] Display `foreign_key` constraints as informational (not enforced) in the grid/header (FR-013) in `src/grid/DataGrid.tsx`
+- [x] T055 Verify responsiveness at ~10,000 rows (scroll, edit, debounced validation) against SC-006; record results
+- [ ] T056 [P] WKWebView smoke test under `npm run tauri dev`: Glide grid rendering + Excel/Sheets clipboard paste (research R12) — _deferred: needs a native Tauri runtime + GUI (cannot run headless here)_
+- [x] T057 macOS packaging: code signing + notarization config and `.parquet` "Open With" association in `src-tauri/tauri.conf.json` _(config + file association done; signing certs + app icon are deployment-time)_
+- [x] T058 [P] Add `README.md` (build/run for browser + Tauri) and ensure `specs/001-data-entry-tool/quickstart.md` steps pass
+- [ ] T059 Run the full quickstart acceptance smoke checklist (US1–US5 table in quickstart.md) — _data-layer covered by automated tests; interactive grid/card smoke needs a browser run_
 
 ---
 

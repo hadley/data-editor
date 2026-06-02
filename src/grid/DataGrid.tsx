@@ -50,7 +50,13 @@ export function DataGrid({
   freezeColumns = 1,
 }: Props) {
   const gridColumns: GridColumn[] = useMemo(
-    () => columns.map((c) => ({ title: c.title, id: c.name, width: 160 })),
+    () =>
+      columns.map((c) => ({
+        // foreign_key is informational only in v1 (FR-013) — surfaced in the header title.
+        title: c.foreignKey ? `${c.title} → ${c.foreignKey.table}.${c.foreignKey.column}` : c.title,
+        id: c.name,
+        width: 160,
+      })),
     [columns],
   );
 
