@@ -28,9 +28,9 @@ frontend that also runs in a plain browser for development.
 
 ```bash
 npm install
-npm run dev        # browser dev build (re-export save fallback)
-npm run tauri dev  # native desktop app (in-place save) — requires the Rust toolchain
-npm test           # run the Vitest suite
+npm run dev          # browser dev build (re-export save fallback)
+npm run tauri dev    # native desktop app (in-place save) — note: `run`, not `npm tauri`
+npm test             # run the Vitest suite
 npm run typecheck  # tsc --noEmit
 npm run build      # production frontend build
 ```
@@ -68,7 +68,7 @@ Design docs live under [specs/001-data-entry-tool/](specs/001-data-entry-tool/)
 - Date pickers and enum dropdowns in the **grid** render as text/number cells; the
   **card view** uses native date/select inputs. Full grid editors need the
   `glide-data-grid-cells` addon.
-- Native packaging needs an app icon (`src-tauri/icons/icon.icns`) and signing certs.
+- App icons are generated (`src-tauri/icons/`); distribution still needs Apple signing/notarization certs.
 
 ## Testing
 

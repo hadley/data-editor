@@ -8,6 +8,9 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { open as tauriOpenDialog } from "@tauri-apps/plugin-dialog";
+import { readFile as tauriReadFile, readTextFile as tauriReadTextFile, writeFile as tauriWriteFile } from "@tauri-apps/plugin-fs";
+
 export type SaveOrigin =
   | { kind: "tauri"; path: string }
   | { kind: "fsaccess"; handle: any }
@@ -27,29 +30,22 @@ function isTauri(): boolean {
   );
 }
 
-async function tauriModule(name: string): Promise<any> {
-  const specifier = name; // variable specifier: not resolved at build time
-  return import(/* @vite-ignore */ specifier);
-}
-
 /** Prompt the user for a Parquet file and its dictionary, returning their bytes/text. */
 export async function openFiles(): Promise<OpenedFiles> {
   if (isTauri()) {
-    const dialog = await tauriModule("@tauri-apps/plugin-dialog");
-    const fs = await tauriModule("@tauri-apps/plugin-fs");
-    const parquetPath = await dialog.open({
+    const parquetPath = await tauriOpenDialog({
       multiple: false,
       filters: [{ name: "Parquet", extensions: ["parquet"] }],
     });
-    const dictPath = await dialog.open({
+    const dictPath = await tauriOpenDialog({
       multiple: false,
       filters: [{ name: "Dictionary", extensions: ["yaml", "yml"] }],
     });
     if (typeof parquetPath !== "string" || typeof dictPath !== "string") {
       throw new Error("File selection cancelled");
     }
-    const parquet = await fs.readFile(parquetPath);
-    const dict = await fs.readTextFile(dictPath);
+    const parquet = await tauriReadFile(parquetPath);
+    const dict = await tauriReadTextFile(dictPath);
     return { parquet, dict, origin: { kind: "tauri", path: parquetPath } };
   }
 
@@ -85,8 +81,7 @@ export async function openFiles(): Promise<OpenedFiles> {
 export async function saveBytes(bytes: Uint8Array, origin: SaveOrigin): Promise<void> {
   switch (origin.kind) {
     case "tauri": {
-      const fs = await tauriModule("@tauri-apps/plugin-fs");
-      await fs.writeFile(origin.path, bytes);
+      await tauriWriteFile(origin.path, bytes);
       return;
     }
     case "fsaccess": {

@@ -17,6 +17,10 @@
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "hyparquet": "^1.8.0",
     "hyparquet-writer": "^0.4.0",
     "js-yaml": "^4.1.0",
@@ -25,6 +29,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
     "@types/js-yaml": "^4.0.9",
