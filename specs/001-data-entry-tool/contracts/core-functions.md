@@ -73,13 +73,16 @@ writeParquet(rows: Row[], schema: ArrowSchema): Uint8Array
 - Writes using the dictionary-derived schema, preserving column names, types, enum dictionaries, BigInt values, and datetime+tz (FR-021, SC-001).
 - Round-trip invariant: `readParquet(writeParquet(rows, toArrow(cols)))` returns rows equal to input (the milestone test).
 
-## `io` save boundary
+## `platform/files.ts` save boundary
 
 ```ts
-save(bytes: Uint8Array, origin: FileHandle | null): Promise<SaveResult>
+openFiles(): Promise<{ parquet: ArrayBuffer; dict: string; origin: FileRef }>
+save(bytes: Uint8Array, origin: FileRef): Promise<SaveResult>
 ```
 
-- In-place overwrite when the environment allows (File System Access handle / future Electron); otherwise re-export the same file (R5, FR-019).
+- **Desktop (Tauri, primary)**: `save` overwrites `origin` in place via the Tauri filesystem API (R5, R12, FR-019).
+- **Browser (dev fallback)**: File System Access handle where available, else re-export the same file.
+- The single seam that differs by runtime; the core (`schema/`, `grid/`, `cards/`, `state/`) is runtime-agnostic and never imports Tauri directly.
 
 ## `grid/history.ts`
 

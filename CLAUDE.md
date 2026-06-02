@@ -5,6 +5,7 @@ specs/001-data-entry-tool/plan.md
 
 Active feature: Data Entry Tool (v1) — browser-based, spreadsheet-style editor
 for single-table Parquet data driven by a `data-dict.yaml` dictionary.
+Shell: Tauri 2 (Rust) desktop app for macOS — reliable in-place save; browser-runnable for dev.
 Stack: React + Vite + TypeScript, Glide Data Grid, hyparquet(+writer), js-yaml, Zod.
 Core invariant: one parsed `Column[]` feeds three pure functions
 (toArrow / toValidators / toColumns) so schema, validation, and UI cannot drift.

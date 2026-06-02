@@ -14,6 +14,7 @@ The feature's source specification arrived with a vetted stack and an explicit l
 - **Rationale**: Pure-JS keeps the app fully client-side (no WASM toolchain, no server) — aligns with file-in/file-out and Simplicity. Reads schema separately from data, which the reconciliation step needs (R4). Escape hatch: reach for `parquet-wasm` only if a required physical type cannot be expressed by the pure-JS writer — to be confirmed in the Phase-0 milestone, not assumed.
 - **Alternatives considered**: parquet-wasm (heavier bundle + WASM init; keep as fallback), DuckDB-wasm (a database engine — far more than a single-table file editor needs, violates YAGNI).
 - **Risk to validate in milestone**: writer fidelity for Int64/BigInt, `Dictionary` (enum) encoding, and `Timestamp` unit+tz. This is exactly what the first milestone's round-trip test exercises.
+- **v1 placement**: Parquet IO stays in the JS webview (hyparquet), even under Tauri, so the type-table logic lives in one language. Moving IO to Rust (`arrow-rs`/`parquet` crates) — which would retire the fidelity risk entirely — is a deliberate **future** option, revisited only if the Milestone-0 round-trip exposes a writer gap (R12).
 
 ## R3. Dictionary parsing & the type table
 
@@ -41,10 +42,10 @@ The feature's source specification arrived with a vetted stack and an explicit l
 
 ## R5. Save mechanism (clarified)
 
-- **Decision**: Saving targets **in-place overwrite of the original file**. In a plain browser, attempt the File System Access API (write back to the opened handle) where available; otherwise fall back to re-exporting the same file via a download. The architecture assumes a later desktop wrapper (e.g., Electron) provides dependable in-place overwrite, and eventually per-row persistence.
-- **Rationale**: Matches the editing cycle ("reopen the file you saved") and the clarification session answer. Abstracting save behind a small `io` boundary keeps the wrapper swap cheap (Simplicity).
-- **Alternatives considered**: Download-only every save (clutters; user must track versions), Save/Save-As prompt each time (extra friction; can be added later if needed).
-- **Open item**: File System Access API browser coverage is uneven; the fallback path makes this non-blocking for v1. No further clarification required.
+- **Decision**: Saving **overwrites the original file in place** using the Tauri filesystem API in the desktop build (the primary v1 target — see R12). The browser dev build falls back to the File System Access API where available, otherwise re-exports the same file. Save is hidden behind `src/platform/files.ts` so the core never knows which runtime it is in.
+- **Rationale**: Matches the editing cycle ("reopen the file you saved") and the clarification answer. Tauri gives the dependable in-place overwrite the browser cannot guarantee, satisfying FR-019 for real in v1 rather than deferring it.
+- **Alternatives considered**: Browser-only with re-export (weakens the editing cycle; Chromium-only in-place), Download-only (clutters; user tracks versions), Save/Save-As prompt each time (extra friction; can add later).
+- **Future**: per-row persistence to disk via the Rust side, reducing reliance on the unsaved-edit warning (FR-019a).
 
 ## R6. Datetime timezone convention
 
@@ -81,6 +82,20 @@ The feature's source specification arrived with a vetted stack and an explicit l
 - **Decision**: Vitest for unit/integration; the Phase-0 milestone round-trip (parse → reconcile → read → write → reread on `examples/foodbank.*`) is the first automated integration test and a merge gate. React Testing Library for grid/card behavior.
 - **Rationale**: Front-loads the riskiest data path before any UI (Constitution IV); pure `schema/` functions need no browser.
 - **Alternatives considered**: Manual round-trip verification (not repeatable — rejected), E2E-only (too slow/coarse to pin BigInt/tz fidelity).
+
+## R12. Desktop shell (Tauri)
+
+- **Decision**: Ship v1 as a **Tauri 2** desktop app (Rust shell + system WebView) targeting macOS, while keeping the web frontend browser-runnable for development. Rust stays thin in v1: file open/overwrite commands only.
+- **Rationale**: Tauri wraps our existing React + Vite frontend with near-zero frontend change, gives reliable in-place save (R5), native menus/dialogs/`.parquet` associations and a native feel, and ships a small (~MBs) low-memory binary. It is lighter than Electron with no loss of capability for this app.
+- **Alternatives considered**:
+  - *Electron*: bundles Chromium → predictable rendering and huge ecosystem, but heavier binary/memory and no benefit our feature needs. Rejected.
+  - *Wails (Go)* / *Neutralino*: smaller ecosystems, no advantage here. Rejected.
+  - *Browser-only v1*: cannot guarantee in-place overwrite (R5). Rejected per the user's decision to commit to a wrapper now.
+- **Caveats to validate early (WKWebView ≠ Chromium)**:
+  1. **Glide Data Grid** (canvas) rendering/perf in WKWebView — smoke-test in Milestone-0.
+  2. **Paste from Excel/Sheets** (FR-023) — route through Tauri's clipboard plugin and confirm rich-clipboard paste in the webview.
+  3. **Packaging** — macOS code signing + notarization for distribution.
+- **Constitution note**: adds a Rust toolchain (logged in plan.md Complexity Tracking); justified by Constitution III (real in-place save / data safety). Parquet IO kept in JS to avoid splitting the consistency core across languages (Simplicity).
 
 ## Resolved unknowns
 

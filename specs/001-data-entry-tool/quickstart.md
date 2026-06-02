@@ -5,7 +5,8 @@ How to set up the project, run it, and verify the riskiest path first.
 ## Prerequisites
 
 - Node.js 20+ and a package manager (npm/pnpm).
-- An evergreen browser (Chromium-based recommended for File System Access in-place save).
+- Rust toolchain (`rustup`) + Xcode command-line tools — required for the Tauri desktop build on macOS.
+- An evergreen browser for the dev fallback (Chromium-based for File System Access save).
 
 ## Setup
 
@@ -15,14 +16,17 @@ npm install
 npm install \
   @glideapps/glide-data-grid \
   hyparquet hyparquet-writer \
-  js-yaml zod
-npm install -D vitest @testing-library/react @testing-library/user-event
+  js-yaml zod \
+  @tauri-apps/api @tauri-apps/plugin-fs @tauri-apps/plugin-dialog @tauri-apps/plugin-clipboard-manager
+npm install -D vitest @testing-library/react @testing-library/user-event @tauri-apps/cli
+npx tauri init     # scaffold src-tauri/ (Rust shell, tauri.conf.json)
 ```
 
 ## Run
 
 ```bash
-npm run dev        # start the app (Vite dev server)
+npm run dev        # browser dev build (Vite) — fast iteration, re-export save fallback
+npm run tauri dev  # native desktop app (Tauri + WKWebView) — real in-place save
 npm test           # run Vitest unit + integration suites
 ```
 
