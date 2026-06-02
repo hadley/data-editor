@@ -11,7 +11,10 @@ import { openFiles, saveBytes, type SaveOrigin } from "./platform/files.ts";
 import { Workbook } from "./state/workbook.ts";
 import { DataGrid } from "./grid/DataGrid.tsx";
 import { ReconcileError } from "./grid/ReconcileError.tsx";
+import { CardView } from "./cards/CardView.tsx";
 import type { CellValue, ReconcileResult } from "./schema/types.ts";
+
+const PHONE_MAX_WIDTH = 600;
 
 export function App() {
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
@@ -19,6 +22,10 @@ export function App() {
   const [reconcileError, setReconcileError] = useState<ReconcileResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverMsg, setHoverMsg] = useState<string | null>(null);
+  const [cardIndex, setCardIndex] = useState(0);
+  const [isNarrow, setIsNarrow] = useState(
+    typeof window !== "undefined" && window.innerWidth < PHONE_MAX_WIDTH,
+  );
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
   const unsubscribe = useRef<(() => void) | null>(null);
   const tableTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,6 +36,13 @@ export function App() {
     unsubscribe.current = workbook?.subscribe(forceRender) ?? null;
     return () => unsubscribe.current?.();
   }, [workbook]);
+
+  // Responsive switch: grid on desktop/tablet, card view on phone widths (FR-028).
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < PHONE_MAX_WIDTH);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Unsaved-edit guard (FR-019a): warn before leaving with pending changes.
   useEffect(() => {
@@ -170,14 +184,25 @@ export function App() {
       </header>
       <main style={{ flex: 1, minHeight: 0 }}>
         {workbook ? (
-          <DataGrid
-            columns={columns}
-            rows={workbook.rows}
-            onEdit={handleEdit}
-            onEditCells={handleEditCells}
-            cellIssue={(r, c) => workbook.cellIssue(r, c)}
-            onHover={setHoverMsg}
-          />
+          isNarrow ? (
+            <CardView
+              columns={columns}
+              rows={workbook.rows}
+              index={cardIndex}
+              onIndexChange={setCardIndex}
+              onEdit={handleEdit}
+              cellIssue={(r, c) => workbook.cellIssue(r, c)}
+            />
+          ) : (
+            <DataGrid
+              columns={columns}
+              rows={workbook.rows}
+              onEdit={handleEdit}
+              onEditCells={handleEditCells}
+              cellIssue={(r, c) => workbook.cellIssue(r, c)}
+              onHover={setHoverMsg}
+            />
+          )
         ) : reconcileError ? (
           <ReconcileError result={reconcileError} onDismiss={() => setReconcileError(null)} />
         ) : (

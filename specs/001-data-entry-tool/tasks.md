@@ -162,14 +162,14 @@ Tauri desktop app with a web frontend (per plan.md): frontend in `src/`, Rust sh
 
 ### Tests for User Story 5
 
-- [ ] T049 [P] [US5] Write failing integration test that the card view edits one record with validation parity to the grid in `tests/integration/cardview.test.ts`
+- [x] T049 [P] [US5] Write failing integration test that the card view edits one record with validation parity to the grid in `tests/integration/cardview.test.ts`
 
 ### Implementation for User Story 5
 
-- [ ] T050 [US5] Implement the single-record card view (vertical typed inputs over the shared workbook) in `src/cards/CardView.tsx`
-- [ ] T051 [US5] Reuse `toColumns`/`toValidators` outputs so card inputs and validation match the grid (FR-029) in `src/cards/CardView.tsx`
-- [ ] T052 [US5] Implement record paging navigation in `src/cards/CardView.tsx`
-- [ ] T053 [US5] Wire the responsive breakpoint to switch grid↔card at phone width in `src/App.tsx` — make T049 pass
+- [x] T050 [US5] Implement the single-record card view (vertical typed inputs over the shared workbook) in `src/cards/CardView.tsx`
+- [x] T051 [US5] Reuse `toColumns`/`toValidators` outputs so card inputs and validation match the grid (FR-029) in `src/cards/CardView.tsx`
+- [x] T052 [US5] Implement record paging navigation in `src/cards/CardView.tsx`
+- [x] T053 [US5] Wire the responsive breakpoint to switch grid↔card at phone width in `src/App.tsx` — make T049 pass
 
 **Checkpoint**: All five user stories independently functional.
 
