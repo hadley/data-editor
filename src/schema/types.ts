@@ -39,6 +39,8 @@ export interface Column {
 /** Parsed dictionary — authoritative description of the table. */
 export interface DataDict {
   name: string | null;
+  /** Data file(s) this dictionary describes, if declared (FR-038). */
+  source: string[];
   columns: Column[];
 }
 

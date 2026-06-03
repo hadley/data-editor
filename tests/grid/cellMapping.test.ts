@@ -20,13 +20,16 @@ const defs = toColumns(
 const def = (name: string) => defs.find((d) => d.name === name)!;
 
 describe("toGridCell", () => {
-  it("shows enum labels but the cell stays keyed", () => {
+  it("renders enums as a dropdown cell keyed by value with label options", () => {
     const cell = toGridCell(def("e"), "A");
-    expect(cell.kind).toBe(GridCellKind.Text);
-    if (cell.kind === GridCellKind.Text) {
-      expect(cell.displayData).toBe("Active");
-      expect(cell.data).toBe("A");
-    }
+    expect(cell.kind).toBe(GridCellKind.Custom);
+    const data = (cell as unknown as { data: { kind: string; value: string; allowedValues: { value: string; label: string }[] } }).data;
+    expect(data.kind).toBe("dropdown-cell");
+    expect(data.value).toBe("A");
+    expect(data.allowedValues).toEqual([
+      { value: "A", label: "Active" },
+      { value: "I", label: "Inactive" },
+    ]);
   });
 
   it("renders datetime as an ISO string", () => {
@@ -34,9 +37,13 @@ describe("toGridCell", () => {
     if (cell.kind === GridCellKind.Text) expect(cell.displayData).toBe("2024-03-01T12:00:00.000Z");
   });
 
-  it("renders bigint ordinals without precision loss in displayData", () => {
+  it("renders bigint ordinals as exact text (no float precision loss)", () => {
     const cell = toGridCell(def("ord"), 9007199254740993n);
-    if (cell.kind === GridCellKind.Number) expect(cell.displayData).toBe("9007199254740993");
+    expect(cell.kind).toBe(GridCellKind.Text);
+    if (cell.kind === GridCellKind.Text) {
+      expect(cell.displayData).toBe("9007199254740993");
+      expect(cell.data).toBe("9007199254740993");
+    }
   });
 
   it("renders null as empty", () => {
@@ -59,8 +66,13 @@ describe("fromGridCell", () => {
     allowOverlay: true,
   });
 
-  it("stores ordinal edits as bigint", () => {
-    expect(fromGridCell(def("ord"), numCell(42))).toBe(42n);
+  it("stores ordinal edits (text cell) as exact bigint", () => {
+    expect(fromGridCell(def("ord"), textCell("42"))).toBe(42n);
+    expect(fromGridCell(def("ord"), textCell("9007199254740993"))).toBe(9007199254740993n);
+  });
+
+  it("keeps unparseable integer text so validation can flag it", () => {
+    expect(fromGridCell(def("ord"), textCell("12x"))).toBe("12x");
   });
 
   it("stores quantity edits as number", () => {

@@ -64,4 +64,24 @@ describe("US3 live validation", () => {
     expect(wb.cellIssue(0, "id")?.rule).toBe("primary_key");
     expect(wb.cellIssue(1, "id")?.rule).toBe("primary_key");
   });
+
+  it("reports invalid rows and the first violating cell (FR-036/FR-037)", () => {
+    const wb = new Workbook(dict, clean());
+    expect(wb.rowHasIssue(1)).toBe(false);
+    wb.setCell(1, "status", "Z"); // invalid enum on row 1
+    wb.setCell(0, "amount", -5); // invalid range on row 0
+    expect(wb.rowHasIssue(0)).toBe(true);
+    expect(wb.rowHasIssue(1)).toBe(true);
+    // earliest by row order → row 0, column `amount`
+    expect(wb.firstViolationCell()).toEqual({ row: 0, col: "amount" });
+  });
+
+  it("clears the invalid-row flag once the row is fixed", () => {
+    const wb = new Workbook(dict, clean());
+    wb.setCell(0, "note", null);
+    expect(wb.rowHasIssue(0)).toBe(true);
+    wb.setCell(0, "note", "ok");
+    expect(wb.rowHasIssue(0)).toBe(false);
+    expect(wb.firstViolationCell()).toBeNull();
+  });
 });

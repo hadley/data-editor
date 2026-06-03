@@ -47,9 +47,42 @@ export class Workbook {
     };
   }
 
+  private invalidRowsCache: Set<number> | null = null;
+
   private notify(markDirty: boolean): void {
     if (markDirty) this.dirty = true;
+    this.invalidRowsCache = null; // violations may have changed
     for (const fn of this.listeners) fn();
+  }
+
+  /** True if any cell in this row has a violation (cached per change). */
+  rowHasIssue(row: number): boolean {
+    if (!this.invalidRowsCache) {
+      const s = new Set<number>();
+      for (const v of this.cellViolations.values()) if ("row" in v.cell) s.add(v.cell.row);
+      for (const v of this.tableViolations) if ("row" in v.cell) s.add(v.cell.row);
+      this.invalidRowsCache = s;
+    }
+    return this.invalidRowsCache.has(row);
+  }
+
+  /** The earliest violating cell (by row, then column order), for jump-to-problem (FR-036). */
+  firstViolationCell(): { row: number; col: string } | null {
+    const order = new Map(this.dict.columns.map((c, i) => [c.name, i]));
+    let best: { row: number; col: string } | null = null;
+    const consider = (cell: { row: number; col: string } | { col: string }) => {
+      if (!("row" in cell)) return;
+      if (
+        !best ||
+        cell.row < best.row ||
+        (cell.row === best.row && (order.get(cell.col) ?? 0) < (order.get(best.col) ?? 0))
+      ) {
+        best = { row: cell.row, col: cell.col };
+      }
+    };
+    for (const v of this.cellViolations.values()) consider(v.cell);
+    for (const v of this.tableViolations) consider(v.cell);
+    return best;
   }
 
   /** Edit a single cell; revalidates that cell immediately (per-cell rules). Undoable. */

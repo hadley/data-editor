@@ -39,7 +39,9 @@ export function CardView({ columns, rows, index, onIndexChange, onEdit, cellIssu
         const issue = cellIssue?.(safeIndex, def.name) ?? null;
         return (
           <div key={def.name} style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>{def.title}</label>
+            <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+              {def.title} <span style={{ fontWeight: 400, color: "#999", fontSize: 12 }}>· {def.typeLabel}</span>
+            </label>
             <Field def={def} value={row[def.name] ?? null} invalid={!!issue} onChange={(v) => onEdit(safeIndex, def.name, v)} />
             {issue && <div style={{ color: "#c00", fontSize: 12, marginTop: 2 }}>{issue.message}</div>}
           </div>
@@ -115,10 +117,16 @@ function displayValue(value: CellValue): string {
 export function parseInput(def: GridColumnDef, raw: string): CellValue {
   const s = raw.trim();
   if (s === "") return null;
+  if (def.bigintStorage) {
+    try {
+      return BigInt(s); // exact integer (FR-031)
+    } catch {
+      return s; // keep invalid text so validation flags it
+    }
+  }
   if (def.kind === "number") {
     const n = Number(s);
-    if (Number.isNaN(n)) return s; // keep invalid text so validation can flag it
-    return def.bigintStorage ? BigInt(Math.trunc(n)) : n;
+    return Number.isNaN(n) ? s : n;
   }
   if (def.kind === "datetime") return new Date(s);
   return s; // text, id, date (ISO), enum key

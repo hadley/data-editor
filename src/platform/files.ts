@@ -29,14 +29,26 @@ export async function openParquetTauri(): Promise<{ bytes: Uint8Array; origin: S
   return { bytes, origin: { kind: "tauri", path } };
 }
 
-/** Tauri: pick a dictionary file, returning its text. */
-export async function openDictTauri(): Promise<string> {
+/** Tauri: pick a dictionary file, returning its text and path. */
+export async function openDictTauri(): Promise<{ text: string; path: string }> {
   const path = await tauriOpenDialog({
     multiple: false,
     filters: [{ name: "Dictionary", extensions: ["yaml", "yml"] }],
   });
   if (typeof path !== "string") throw new Error("File selection cancelled");
-  return tauriReadTextFile(path);
+  return { text: await tauriReadTextFile(path), path };
+}
+
+/** Tauri: read a data file named in the dictionary's `source`, resolved next to the dict (FR-038). */
+export async function readSiblingTauri(
+  dictPath: string,
+  sourceName: string,
+): Promise<{ bytes: Uint8Array; origin: SaveOrigin }> {
+  const resolved = sourceName.includes("/")
+    ? sourceName
+    : dictPath.replace(/[^/\\]+$/, sourceName);
+  const bytes = await tauriReadFile(resolved);
+  return { bytes, origin: { kind: "tauri", path: resolved } };
 }
 
 /** Save bytes back to the original file in place (Tauri) or re-export (browser). */

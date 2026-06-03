@@ -11,12 +11,17 @@ frontend that also runs in a plain browser for development.
 ## Features (v1)
 
 - Open a matching Parquet + dictionary pair; **load-time reconciliation** rejects mismatches with specifics.
+  Auto-loads the data file named in the dictionary's `source` (desktop) or hints it (browser).
 - Edit typed cells and add rows in a virtualized grid ([Glide Data Grid](https://grid.glideapps.com/)).
-- **Live validation** from the dictionary — invalid cells are flagged (not blocked), with a running count.
-- Spreadsheet conveniences: keyboard nav, copy/paste, fill-down, frozen header, **undo/redo**.
+  Column headers show the dictionary type; enums use a dropdown; integers stay digit-exact.
+- **Live validation** from the dictionary — invalid cells flagged (not blocked), with a clickable
+  problems count that jumps to the first issue and red markers on problem rows.
+- Spreadsheet conveniences: keyboard nav, Tab-to-append a row, copy/paste, fill-down, frozen header,
+  resizable columns, and a **full undo/redo** stack.
 - **Phone card view**: one record at a time on narrow screens, same validation.
 - **Lossless** Parquet round-trip — column names, types, enum keys, Int64 (BigInt), and datetimes survive.
-- Save **in place** (Tauri) or re-export (browser); warns before discarding unsaved edits or saving with violations.
+- Save **in place** (Tauri) or re-export (browser), with optional **autosave**; warns before discarding
+  unsaved edits or manually saving with violations.
 
 ## Prerequisites
 

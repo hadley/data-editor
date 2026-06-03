@@ -43,7 +43,14 @@ export function parse(yamlText: string): DataDict {
 
   const columns = root.columns.map((raw) => normalizeColumn(raw));
   const name = typeof root.name === "string" ? root.name : null;
-  return { name, columns };
+  return { name, source: normalizeSource(root.source), columns };
+}
+
+/** `source` may be a single file name or a list; normalize to a string[] (FR-038). */
+function normalizeSource(raw: unknown): string[] {
+  if (typeof raw === "string") return [raw];
+  if (Array.isArray(raw)) return raw.filter((s): s is string => typeof s === "string");
+  return [];
 }
 
 function normalizeColumn(raw: unknown): Column {

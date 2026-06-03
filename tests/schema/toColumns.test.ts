@@ -19,12 +19,32 @@ describe("toColumns", () => {
       ).columns,
     );
     expect(Object.fromEntries(cols.map((c) => [c.name, c.kind]))).toEqual({
-      id: "text", // id is opaque text, not number (FR-009)
-      ord: "number",
+      id: "text", // id is opaque text (FR-009)
+      ord: "text", // integers render as exact text, not a float control (FR-031)
       s: "text",
       b: "boolean",
       d: "date",
       dt: "datetime",
+      e: "enum",
+    });
+  });
+
+  it("labels each column with its dictionary type (FR-030)", () => {
+    const cols = toColumns(
+      parse(
+        [
+          "columns:",
+          "  - {name: id, type: number, subtype: id}",
+          "  - {name: ord, type: number, subtype: ordinal}",
+          "  - {name: qty, type: number, subtype: quantity}",
+          "  - {name: e, type: enum, values: [a]}",
+        ].join("\n"),
+      ).columns,
+    );
+    expect(Object.fromEntries(cols.map((c) => [c.name, c.typeLabel]))).toEqual({
+      id: "id",
+      ord: "integer",
+      qty: "number",
       e: "enum",
     });
   });

@@ -3,7 +3,23 @@
 // Tauri: native dialog buttons (so we keep a path for in-place save).
 
 import { useCallback, useRef, useState } from "react";
-import { isTauri, openDictTauri, openParquetTauri, type SaveOrigin } from "../platform/files.ts";
+import {
+  isTauri,
+  openDictTauri,
+  openParquetTauri,
+  readSiblingTauri,
+  type SaveOrigin,
+} from "../platform/files.ts";
+import { parse } from "../schema/parse.ts";
+
+/** Best-effort: pull `source` file names from dictionary text without throwing. */
+function sourceNames(dictText: string): string[] {
+  try {
+    return parse(dictText).source;
+  } catch {
+    return [];
+  }
+}
 
 export interface LoadedFiles {
   dictText: string;
@@ -21,6 +37,7 @@ export function OpenPanel({ onLoaded, onError }: Props) {
   const [dictName, setDictName] = useState<string | null>(null);
   const [parquet, setParquet] = useState<{ bytes: Uint8Array; origin: SaveOrigin } | null>(null);
   const [parquetName, setParquetName] = useState<string | null>(null);
+  const [sourceHint, setSourceHint] = useState<string | null>(null);
   const tauri = isTauri();
 
   const tryOpen = useCallback(
@@ -40,6 +57,7 @@ export function OpenPanel({ onLoaded, onError }: Props) {
       const text = await file.text();
       setDictText(text);
       setDictName(file.name);
+      setSourceHint(sourceNames(text)[0] ?? null); // can't auto-read by path in the browser
       tryOpen(text, parquet);
     },
     [parquet, tryOpen],
@@ -60,9 +78,24 @@ export function OpenPanel({ onLoaded, onError }: Props) {
   // --- Tauri: native dialogs ---
   const pickDictTauri = useCallback(async () => {
     try {
-      const text = await openDictTauri();
+      const { text, path } = await openDictTauri();
       setDictText(text);
-      setDictName("dictionary.yaml");
+      setDictName(path.split("/").pop() ?? "dictionary.yaml");
+      // Auto-load the data file named in `source`, resolved next to the dict (FR-038).
+      const names = sourceNames(text);
+      setSourceHint(names[0] ?? null);
+      if (names[0]) {
+        try {
+          const { bytes, origin } = await readSiblingTauri(path, names[0]);
+          const next = { bytes, origin };
+          setParquet(next);
+          setParquetName(names[0]);
+          tryOpen(text, next);
+          return;
+        } catch {
+          /* fall back to manual selection */
+        }
+      }
       tryOpen(text, parquet);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -104,7 +137,12 @@ export function OpenPanel({ onLoaded, onError }: Props) {
         )}
       </Step>
 
-      <Step n={2} label="Data (.parquet)" done={parquet !== null} doneName={parquetName}>
+      <Step
+        n={2}
+        label={sourceHint ? `Data (.parquet) — expecting ${sourceHint}` : "Data (.parquet)"}
+        done={parquet !== null}
+        doneName={parquetName}
+      >
         {tauri ? (
           <button onClick={pickParquetTauri}>Choose data file…</button>
         ) : (

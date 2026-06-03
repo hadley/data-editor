@@ -11,12 +11,14 @@ export interface GridColumnDef {
   name: string;
   /** Header label. */
   title: string;
+  /** Short human label for the dictionary type, shown in the header/card (FR-030). */
+  typeLabel: string;
   kind: CellKind;
   /** For enum columns: the allowed options (label shown, value stored). */
   enumValues: EnumValue[] | null;
   /** Placeholder/hint for string columns, from `examples` (FR-008). */
   placeholder: string | null;
-  /** True for ordinal numbers stored as Int64 (carrier: bigint) — preserves precision. */
+  /** True for integer (ordinal) columns stored as Int64 (carrier: bigint). */
   bigintStorage: boolean;
   /** Informational only in v1 (FR-013). */
   foreignKey: { table: string; column: string } | null;
@@ -26,6 +28,7 @@ export function toColumns(columns: Column[]): GridColumnDef[] {
   return columns.map((c) => ({
     name: c.name,
     title: c.name,
+    typeLabel: typeLabelFor(c),
     kind: cellKindFor(c),
     enumValues: c.values,
     placeholder: c.examples && c.examples.length > 0 ? c.examples.join(", ") : null,
@@ -37,8 +40,28 @@ export function toColumns(columns: Column[]): GridColumnDef[] {
 function cellKindFor(c: Column): CellKind {
   switch (c.type) {
     case "number":
-      // id is opaque text (no aggregation, FR-009); ordinal/quantity are numeric.
-      return c.subtype === "id" ? "text" : "number";
+      // id and ordinal render as exact text (no float coercion, FR-009/FR-031);
+      // quantity is a floating-point numeric cell.
+      return c.subtype === "quantity" ? "number" : "text";
+    case "string":
+      return "text";
+    case "boolean":
+      return "boolean";
+    case "date":
+      return "date";
+    case "datetime":
+      return "datetime";
+    case "enum":
+      return "enum";
+  }
+}
+
+function typeLabelFor(c: Column): string {
+  switch (c.type) {
+    case "number":
+      if (c.subtype === "id") return "id";
+      if (c.subtype === "ordinal") return "integer";
+      return "number";
     case "string":
       return "text";
     case "boolean":

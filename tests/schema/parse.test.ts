@@ -51,4 +51,13 @@ describe("parse", () => {
   it("throws when columns is missing", () => {
     expect(() => parse(`name: t`)).toThrow(/columns/);
   });
+
+  it("normalizes `source` to a string array (FR-038)", () => {
+    expect(parse(`source: a.parquet\ncolumns:\n  - {name: x, type: string}`).source).toEqual(["a.parquet"]);
+    expect(parse(`source: [a.parquet, b.parquet]\ncolumns:\n  - {name: x, type: string}`).source).toEqual([
+      "a.parquet",
+      "b.parquet",
+    ]);
+    expect(parse(`columns:\n  - {name: x, type: string}`).source).toEqual([]);
+  });
 });

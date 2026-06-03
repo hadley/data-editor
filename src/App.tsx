@@ -9,7 +9,7 @@ import { readParquet } from "./io/readParquet.ts";
 import { writeParquet } from "./io/writeParquet.ts";
 import { saveBytes, type SaveOrigin } from "./platform/files.ts";
 import { Workbook } from "./state/workbook.ts";
-import { DataGrid } from "./grid/DataGrid.tsx";
+import { DataGrid, type DataGridHandle } from "./grid/DataGrid.tsx";
 import { ReconcileError } from "./grid/ReconcileError.tsx";
 import { CardView } from "./cards/CardView.tsx";
 import { OpenPanel, type LoadedFiles } from "./open/OpenPanel.tsx";
@@ -25,12 +25,18 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [hoverMsg, setHoverMsg] = useState<string | null>(null);
   const [cardIndex, setCardIndex] = useState(0);
+  const [autosaveOn, setAutosaveOn] = useState(true);
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== "undefined" && window.innerWidth < PHONE_MAX_WIDTH,
   );
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
   const unsubscribe = useRef<(() => void) | null>(null);
   const tableTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dataGridRef = useRef<DataGridHandle>(null);
+
+  // Autosave only where we can overwrite in place (never repeatedly download).
+  const canAutosave = origin?.kind === "tauri";
 
   useEffect(() => {
     unsubscribe.current?.();
@@ -80,36 +86,63 @@ export function App() {
     }
   }, []);
 
-  const scheduleTable = useCallback(() => {
+  const silentSave = useCallback(async () => {
+    if (!workbook || !origin || origin.kind !== "tauri") return;
+    try {
+      await saveBytes(writeParquet(workbook.rows, workbook.schema), origin);
+      workbook.markSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [workbook, origin]);
+
+  // Debounced cross-row revalidation + (optional) autosave after edits settle.
+  const afterMutate = useCallback(() => {
     if (tableTimer.current) clearTimeout(tableTimer.current);
     tableTimer.current = setTimeout(() => workbook?.recomputeTable(), 300);
-  }, [workbook]);
+    if (autosaveOn && canAutosave) {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = setTimeout(() => void silentSave(), 1200);
+    }
+  }, [workbook, autosaveOn, canAutosave, silentSave]);
 
   const handleEdit = useCallback(
     (row: number, col: string, value: CellValue) => {
       workbook?.setCell(row, col, value);
-      scheduleTable();
+      afterMutate();
     },
-    [workbook, scheduleTable],
+    [workbook, afterMutate],
   );
 
   const handleEditCells = useCallback(
     (edits: { row: number; col: string; value: CellValue }[]) => {
       workbook?.setCells(edits);
-      scheduleTable();
+      afterMutate();
     },
-    [workbook, scheduleTable],
+    [workbook, afterMutate],
   );
+
+  const handleAddRow = useCallback(() => {
+    workbook?.addRow();
+    afterMutate();
+  }, [workbook, afterMutate]);
 
   const handleUndo = useCallback(() => {
     workbook?.undo();
-    scheduleTable();
-  }, [workbook, scheduleTable]);
+    afterMutate();
+  }, [workbook, afterMutate]);
 
   const handleRedo = useCallback(() => {
     workbook?.redo();
-    scheduleTable();
-  }, [workbook, scheduleTable]);
+    afterMutate();
+  }, [workbook, afterMutate]);
+
+  const jumpToFirstProblem = useCallback(() => {
+    const cell = workbook?.firstViolationCell();
+    if (!cell) return;
+    if (isNarrow) setCardIndex(cell.row);
+    else dataGridRef.current?.focusCell(cell.row, cell.col);
+  }, [workbook, isNarrow]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -162,10 +195,14 @@ export function App() {
         violationCount={violationCount}
         hoverMsg={hoverMsg}
         error={error}
-        onAddRow={() => workbook?.addRow()}
+        autosaveOn={autosaveOn}
+        canAutosave={canAutosave}
+        onToggleAutosave={() => setAutosaveOn((v) => !v)}
+        onAddRow={handleAddRow}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onSave={handleSave}
+        onJumpToProblem={jumpToFirstProblem}
         onClose={() => {
           setWorkbook(null);
           setOrigin(null);
@@ -192,11 +229,14 @@ export function App() {
             />
           ) : (
             <DataGrid
+              ref={dataGridRef}
               columns={columns}
               rows={workbook.rows}
               onEdit={handleEdit}
               onEditCells={handleEditCells}
+              onAppendRow={handleAddRow}
               cellIssue={(r, c) => workbook.cellIssue(r, c)}
+              rowHasIssue={(r) => workbook.rowHasIssue(r)}
               onHover={setHoverMsg}
             />
           )
@@ -218,10 +258,14 @@ function Toolbar(props: {
   violationCount: number;
   hoverMsg: string | null;
   error: string | null;
+  autosaveOn: boolean;
+  canAutosave: boolean;
+  onToggleAutosave: () => void;
   onAddRow: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onSave: () => void;
+  onJumpToProblem: () => void;
   onClose: () => void;
 }) {
   return (
@@ -241,12 +285,19 @@ function Toolbar(props: {
           <button onClick={props.onSave} style={props.dirty ? primaryBtn : undefined}>
             Save{props.dirty ? " ●" : ""}
           </button>
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: props.canAutosave ? "#333" : "#aaa" }}
+            title={props.canAutosave ? "Autosave to the original file" : "Autosave needs in-place save (desktop)"}
+          >
+            <input type="checkbox" checked={props.autosaveOn} disabled={!props.canAutosave} onChange={props.onToggleAutosave} />
+            Autosave
+          </label>
           <button onClick={props.onClose}>Close</button>
           <span style={{ flex: 1 }} />
           {props.violationCount > 0 && (
-            <span style={badge}>
-              {props.violationCount} problem{props.violationCount === 1 ? "" : "s"}
-            </span>
+            <button style={badgeBtn} onClick={props.onJumpToProblem} title="Jump to the first problem">
+              {props.violationCount} problem{props.violationCount === 1 ? "" : "s"} →
+            </button>
           )}
           {props.hoverMsg && <span style={{ color: "#c00", fontSize: 13 }}>{props.hoverMsg}</span>}
         </>
@@ -292,11 +343,13 @@ const tab: React.CSSProperties = {
 };
 const dataArea: React.CSSProperties = { flex: 1, minHeight: 0, overflow: "hidden", position: "relative" };
 const sep: React.CSSProperties = { width: 1, height: 20, background: "#ddd", margin: "0 4px" };
-const badge: React.CSSProperties = {
+const badgeBtn: React.CSSProperties = {
   background: "#fee2e2",
   color: "#c00",
+  border: "1px solid #fca5a5",
   borderRadius: 10,
-  padding: "2px 8px",
+  padding: "2px 10px",
   fontSize: 12,
+  cursor: "pointer",
 };
 const primaryBtn: React.CSSProperties = { background: "#4f46e5", color: "white", border: "1px solid #4f46e5" };

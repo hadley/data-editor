@@ -122,6 +122,12 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - Q: Should the tool protect against losing unsaved edits? → A: Yes — warn before any action that would discard unsaved edits. (Future direction: run in a context that persists each row to disk as it is entered, reducing reliance on the warning.)
 - Q: What dataset size must the grid stay responsive at? → A: ~10,000 rows.
 
+### Session 2026-06-03
+
+- Q: How should autosave interact with the save-with-violations confirmation (FR-020)? → A: Autosave persists the current state (including flagged-invalid values) silently, without a confirmation prompt, since the file legitimately holds in-progress data. It is enabled only where the tool can overwrite in place (so it never repeatedly downloads files); the warn+confirm of FR-020 still applies to explicit manual saves. Autosave is debounced after edits settle.
+- Q: How should integer columns avoid the display precision loss seen for large values? → A: Integer (ordinal) values are displayed and entered as exact text rather than through a floating-point numeric control, so digits past 2^53 are never altered on screen.
+- Q: How can the tool reduce the two-step open friction? → A: The dictionary may declare a `source` field naming the data file(s) it describes. After the dictionary is chosen, the tool uses `source` to auto-load the data file where it can resolve the path (desktop), or to show the expected file name as a hint (browser).
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -173,6 +179,18 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-027**: The tool MUST present the full grid on desktop (primary target) and on tablet with touch-friendly targets.
 - **FR-028**: On phone-sized screens the tool MUST present a single-record card view — fields laid out vertically with the same typed inputs and validation as the grid — with navigation by paging between records rather than horizontal scrolling.
 - **FR-029**: The grid and the card view MUST operate over one shared data and validation model (two presentations of the same data, not two separate behaviors).
+
+#### v1.1 enhancements
+
+- **FR-030**: Each column MUST show its dictionary type to the user (e.g., in the column header and in the card-view field labels), so the expected kind of value is discoverable without consulting the dictionary.
+- **FR-031**: Integer (ordinal) values MUST be displayed and entered as exact text, never coerced through a floating-point control, so digit-exactness is preserved on screen as well as on disk.
+- **FR-032**: Enum columns MUST offer a selection control (dropdown) listing the allowed labels, in addition to free typing; the stored value remains the key.
+- **FR-033**: Pressing Tab on the last cell of the last row MUST append a new empty row and move into it, enabling continuous keyboard entry. Adding a row MUST remain allowed even while validation problems exist.
+- **FR-034**: The tool MUST provide a full undo/redo stack covering all data mutations (cell edits, row additions, paste, fill-down), reachable by keyboard (⌘/Ctrl+Z, ⇧⌘/Ctrl+Z or Ctrl+Y) and toolbar controls.
+- **FR-035**: The tool MUST support autosave: where it can overwrite in place, it persists the current state automatically (debounced) after edits, without a confirmation prompt; the FR-020 warn+confirm applies only to explicit manual saves.
+- **FR-036**: The outstanding-violations indicator MUST be actionable: activating it MUST move the selection to (and scroll to) the first violating cell.
+- **FR-037**: Rows containing a validation problem MUST be visually marked at the row indicator (e.g., a red row-number background), so problem rows are scannable.
+- **FR-038**: The dictionary MAY declare a `source` naming the data file(s) it describes. After the dictionary is chosen, the tool MUST use `source` to auto-load the data file when it can resolve the path (desktop), or to show the expected file name as a hint (browser).
 
 ### Key Entities *(include if feature involves data)*
 

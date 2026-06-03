@@ -6,6 +6,8 @@ This is the external input contract: the shape of the dictionary file the tool c
 
 ```yaml
 name: foodbank            # optional table name
+source: foodbank.parquet  # optional: data file(s) this dictionary describes (FR-038);
+                          #   string or list; used to auto-load (desktop) or hint (browser)
 columns:                  # ordered list — drives grid order (FR-006)
   - name: client_id
     type: number

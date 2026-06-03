@@ -1,21 +1,35 @@
 // DataGrid.tsx — Glide Data Grid bound to the workbook.
-// Numeric width/height (measured from the container — strings like "100%" break Glide's
-// hit-testing/editing), resizable columns sized to their widest value, and a grey
-// background below the data so short tables don't show empty rows.
+// Numeric width/height (measured from the container), resizable columns sized to their
+// widest value, type icons in headers, enum dropdown cells, tab-to-append rows, red
+// markers on invalid rows, and an imperative focusCell() for jump-to-problem.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  CompactSelection,
   DataEditor,
+  GridColumnIcon,
+  type DataEditorRef,
   type EditableGridCell,
   type EditListItem,
   type GridCell,
   type GridColumn,
   type GridMouseEventArgs,
+  type GridSelection,
   type Item,
   type Rectangle,
+  type Theme,
 } from "@glideapps/glide-data-grid";
+import { allCells } from "@glideapps/glide-data-grid-cells";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { type GridColumnDef } from "../schema/toColumns.ts";
+import { type CellKind, type GridColumnDef } from "../schema/toColumns.ts";
 import type { CellValue, Row, Violation } from "../schema/types.ts";
 import { fromGridCell, toGridCell } from "./cellMapping.ts";
 import { measureColumns } from "./columnWidth.ts";
@@ -26,33 +40,58 @@ export interface GridEdit {
   value: CellValue;
 }
 
+export interface DataGridHandle {
+  /** Select and scroll to a cell (jump-to-problem, FR-036). */
+  focusCell: (row: number, col: string) => void;
+}
+
 interface Props {
   columns: GridColumnDef[];
   rows: Row[];
   onEdit: (row: number, col: string, value: CellValue) => void;
   onEditCells?: (edits: GridEdit[]) => void;
+  onAppendRow?: () => void;
   cellIssue?: (row: number, col: string) => Violation | null;
+  rowHasIssue?: (row: number) => boolean;
   onHover?: (message: string | null) => void;
   freezeColumns?: number;
 }
 
 const INVALID_BG = "#ffe5e5";
+const INVALID_ROW_HEADER = "#fecaca";
 const HEADER_HEIGHT = 36;
 const ROW_HEIGHT = 34;
+const ICON_PX = 30;
 
-export function DataGrid({
-  columns,
-  rows,
-  onEdit,
-  onEditCells,
-  cellIssue,
-  onHover,
-  freezeColumns = 1,
-}: Props) {
+function iconFor(kind: CellKind, typeLabel: string): GridColumnIcon {
+  switch (kind) {
+    case "number":
+      return GridColumnIcon.HeaderNumber;
+    case "boolean":
+      return GridColumnIcon.HeaderBoolean;
+    case "date":
+      return GridColumnIcon.HeaderDate;
+    case "datetime":
+      return GridColumnIcon.HeaderTime;
+    case "enum":
+      return GridColumnIcon.HeaderLookup;
+    default:
+      return typeLabel === "id" ? GridColumnIcon.HeaderRowID : GridColumnIcon.HeaderString;
+  }
+}
+
+export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
+  { columns, rows, onEdit, onEditCells, onAppendRow, cellIssue, rowHasIssue, onHover, freezeColumns = 1 },
+  ref,
+) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<DataEditorRef>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [gridSelection, setGridSelection] = useState<GridSelection>({
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty(),
+  });
 
-  // Measure the container so the grid gets numeric dimensions.
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
@@ -63,18 +102,29 @@ export function DataGrid({
     return () => ro.disconnect();
   }, []);
 
-  // Resizable column widths: seed from content, then let the user drag (issue: resizable + capped).
   const [widths, setWidths] = useState<Record<string, number>>({});
   const colKey = columns.map((c) => c.name).join("|");
-  // Re-seed widths only when the column set changes, not on every edit
-  // (so a user's manual resize survives edits). `rows` is read for initial sizing only.
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
   useEffect(() => {
-    setWidths(measureColumns(columnsRef.current, rowsRef.current));
+    setWidths(measureColumns(columnsRef.current, rowsRef.current, ICON_PX));
   }, [colKey]);
+
+  useImperativeHandle(ref, () => ({
+    focusCell: (row: number, col: string) => {
+      const colIdx = columnsRef.current.findIndex((c) => c.name === col);
+      if (colIdx < 0) return;
+      setGridSelection({
+        columns: CompactSelection.empty(),
+        rows: CompactSelection.empty(),
+        current: { cell: [colIdx, row], range: { x: colIdx, y: row, width: 1, height: 1 }, rangeStack: [] },
+      });
+      editorRef.current?.scrollTo(colIdx, row);
+      editorRef.current?.focus();
+    },
+  }));
 
   const gridColumns: GridColumn[] = useMemo(
     () =>
@@ -82,6 +132,7 @@ export function DataGrid({
         title: c.foreignKey ? `${c.title} → ${c.foreignKey.table}.${c.foreignKey.column}` : c.title,
         id: c.name,
         width: widths[c.name] ?? 160,
+        icon: iconFor(c.kind, c.typeLabel),
       })),
     [columns, widths],
   );
@@ -97,7 +148,7 @@ export function DataGrid({
       const value = rows[rowIdx]?.[def.name] ?? null;
       const base = toGridCell(def, value);
       if (cellIssue?.(rowIdx, def.name)) {
-        return { ...base, themeOverride: { bgCell: INVALID_BG } };
+        return { ...base, themeOverride: { bgCell: INVALID_BG } } as GridCell;
       }
       return base;
     },
@@ -114,13 +165,11 @@ export function DataGrid({
   );
 
   const getCellsForSelection = useCallback(
-    (selection: Rectangle) => {
+    (sel: Rectangle) => {
       const out: GridCell[][] = [];
-      for (let r = selection.y; r < selection.y + selection.height; r++) {
+      for (let r = sel.y; r < sel.y + sel.height; r++) {
         const rowCells: GridCell[] = [];
-        for (let c = selection.x; c < selection.x + selection.width; c++) {
-          rowCells.push(getCellContent([c, r]));
-        }
+        for (let c = sel.x; c < sel.x + sel.width; c++) rowCells.push(getCellContent([c, r]));
         out.push(rowCells);
       }
       return out;
@@ -157,15 +206,20 @@ export function DataGrid({
     [columns, cellIssue, onHover],
   );
 
-  // Size the grid to its content, capped at the container — so short tables leave a
-  // grey gap below instead of empty rows, and tall tables scroll inside the grid.
-  const contentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT + 2;
+  const getRowThemeOverride = useCallback(
+    (row: number): Partial<Theme> | undefined =>
+      rowHasIssue?.(row) ? { bgHeader: INVALID_ROW_HEADER, bgHeaderHasFocus: INVALID_ROW_HEADER } : undefined,
+    [rowHasIssue],
+  );
+
+  const contentHeight = HEADER_HEIGHT + (rows.length + 1) * ROW_HEIGHT + 2; // +1 for trailing add-row
   const gridHeight = Math.max(HEADER_HEIGHT + ROW_HEIGHT, Math.min(contentHeight, size.height));
 
   return (
     <div ref={wrapperRef} style={{ width: "100%", height: "100%", background: "#f3f4f6" }}>
       {size.width > 0 && (
         <DataEditor
+          ref={editorRef}
           columns={gridColumns}
           rows={rows.length}
           rowHeight={ROW_HEIGHT}
@@ -175,11 +229,17 @@ export function DataGrid({
           onCellsEdited={onCellsEdited}
           onColumnResize={onColumnResize}
           getCellsForSelection={getCellsForSelection}
+          getRowThemeOverride={getRowThemeOverride}
           onItemHovered={onItemHovered}
+          customRenderers={allCells}
+          gridSelection={gridSelection}
+          onGridSelectionChange={setGridSelection}
+          onRowAppended={onAppendRow ? () => void onAppendRow() : undefined}
+          trailingRowOptions={onAppendRow ? { sticky: false, tint: true } : undefined}
+          rowMarkers="number"
           fillHandle
           smoothScrollX
           smoothScrollY
-          rowMarkers="number"
           freezeColumns={Math.min(freezeColumns, columns.length)}
           width={size.width}
           height={gridHeight}
@@ -187,4 +247,4 @@ export function DataGrid({
       )}
     </div>
   );
-}
+});

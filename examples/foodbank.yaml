@@ -1,4 +1,5 @@
 name: foodbank_visits
+source: foodbank.parquet
 columns:
   - name: client_id
     type: number
