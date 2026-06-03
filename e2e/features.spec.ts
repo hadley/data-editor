@@ -39,9 +39,25 @@ test("Tab on the bottom-right cell appends a new row", async ({ page }) => {
   await page.mouse.click(box.x + 100, box.y + 53); // row 0, first data column
   for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
   for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight");
+  await expect.poll(() => selCell(page)).toEqual([8, 3]); // bottom-right settled
   await page.keyboard.press("Tab");
 
   await expect.poll(() => rowCount(page)).toBe(5);
+});
+
+const selCell = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => (window as unknown as { __gridSel?: readonly [number, number] | null }).__gridSel);
+
+test("Tab off the end of a row wraps to the first column of the next row", async ({ page }) => {
+  await open(page);
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + 100, box.y + 53); // row 0
+  for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight"); // to last column, row 0
+  await expect.poll(() => selCell(page)).toEqual([8, 0]);
+  await page.keyboard.press("Tab"); // wrap, not append
+  await expect.poll(() => selCell(page)).toEqual([0, 1]);
+  expect(await rowCount(page)).toBe(4); // no row appended (not the last row)
 });
 
 test("a validation problem surfaces a clickable badge that jumps to it", async ({ page }) => {

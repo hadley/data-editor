@@ -87,10 +87,17 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   const wrapperRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<DataEditorRef>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [gridSelection, setGridSelection] = useState<GridSelection>({
+  const [gridSelection, setGridSelectionState] = useState<GridSelection>({
     columns: CompactSelection.empty(),
     rows: CompactSelection.empty(),
   });
+  // Mirror selection in a ref: React state lags during rapid key presses, but the
+  // keyboard handler needs the *current* cell synchronously.
+  const selectionRef = useRef(gridSelection);
+  const setGridSelection = useCallback((s: GridSelection) => {
+    selectionRef.current = s;
+    setGridSelectionState(s);
+  }, []);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -212,29 +219,39 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     [columns, cellIssue, onHover],
   );
 
-  // Tab on the bottom-right cell appends a row and moves into it (FR-033).
-  // Handled in the capture phase so we intercept before Glide's own Tab navigation.
+  const selectCell = useCallback((col: number, row: number) => {
+    setGridSelection({
+      columns: CompactSelection.empty(),
+      rows: CompactSelection.empty(),
+      current: { cell: [col, row], range: { x: col, y: row, width: 1, height: 1 }, rangeStack: [] },
+    });
+    editorRef.current?.scrollTo(col, row);
+  }, []);
+
+  // Tab off the end of a row wraps to the first column of the next row; off the end of
+  // the LAST row appends a new row and moves into it (FR-033). Handled in the capture
+  // phase so we intercept before Glide's own Tab navigation.
   const onWrapperKeyDownCapture = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key !== "Tab" || e.shiftKey || !onAppendRow) return;
-      const cur = gridSelection.current?.cell;
+      if (e.key !== "Tab" || e.shiftKey) return;
+      const cur = selectionRef.current.current?.cell;
       if (!cur) return;
       const lastCol = columnsRef.current.length - 1;
+      if (cur[0] !== lastCol) return; // not at the end of a row — let Glide move right
       const lastRow = rowsRef.current.length - 1;
-      if (cur[0] === lastCol && cur[1] === lastRow) {
+      if (cur[1] === lastRow) {
+        if (!onAppendRow) return; // nothing to append into
         e.preventDefault();
         e.stopPropagation();
         onAppendRow();
-        const newRow = rowsRef.current.length; // index of the row being appended
-        setGridSelection({
-          columns: CompactSelection.empty(),
-          rows: CompactSelection.empty(),
-          current: { cell: [0, newRow], range: { x: 0, y: newRow, width: 1, height: 1 }, rangeStack: [] },
-        });
-        editorRef.current?.scrollTo(0, newRow);
+        selectCell(0, rowsRef.current.length); // the row being appended
+      } else {
+        e.preventDefault();
+        e.stopPropagation();
+        selectCell(0, cur[1] + 1); // wrap to next row, first column
       }
     },
-    [gridSelection, onAppendRow],
+    [onAppendRow, selectCell],
   );
 
   const getRowThemeOverride = useCallback(
