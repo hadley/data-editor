@@ -42,6 +42,10 @@ export interface GridEdit {
 export interface DataGridHandle {
   /** Select and scroll to a cell (jump-to-problem, FR-036). */
   focusCell: (row: number, col: string) => void;
+  /** Scroll so `row` is at the top (per-tab scroll restore). */
+  scrollToRow: (row: number) => void;
+  /** Scroll to the last row (after appending). */
+  scrollToBottom: () => void;
 }
 
 interface Props {
@@ -57,6 +61,8 @@ interface Props {
   onSelectCell?: (cell: { row: number; col: string } | null) => void;
   /** Right-click on a row → show an insert/delete menu at screen (x, y). */
   onRowContextMenu?: (row: number, x: number, y: number) => void;
+  /** First visible row, for saving each tab's scroll position. */
+  onVisibleRowChange?: (firstRow: number) => void;
   freezeColumns?: number;
 }
 
@@ -81,6 +87,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     onHeaderHover,
     onSelectCell,
     onRowContextMenu,
+    onVisibleRowChange,
     freezeColumns = 1,
   },
   ref,
@@ -139,6 +146,13 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
       });
       editorRef.current?.scrollTo(colIdx, row);
       editorRef.current?.focus();
+    },
+    scrollToRow: (row: number) => {
+      editorRef.current?.scrollTo(0, Math.max(0, row), "vertical", 0, 0, { vAlign: "start" });
+    },
+    scrollToBottom: () => {
+      const last = Math.max(0, rowsRef.current.length - 1);
+      editorRef.current?.scrollTo(0, last, "vertical", 0, 0, { vAlign: "end" });
     },
   }));
 
@@ -415,6 +429,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
           onColumnResize={onColumnResize}
           getCellsForSelection={getCellsForSelection}
           getRowThemeOverride={getRowThemeOverride}
+          onVisibleRegionChanged={(range) => onVisibleRowChange?.(range.y)}
           onItemHovered={onItemHovered}
           customRenderers={allCells}
           drawHeader={drawHeader}

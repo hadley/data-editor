@@ -208,6 +208,9 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-050**: A `data-dict.yaml` MAY describe multiple tables under a `tables:` map. The tool MUST open one tab per table, each with its own grid, validation, undo history, and save target, switchable without losing edits in the others.
 - **FR-051**: Each table's `source` MUST be resolved relative to the directory containing the `data-dict.yaml`, not the current working directory. On desktop the tool reads every table's source automatically; in the browser it resolves them within a user-chosen folder (single-table dictionaries keep the single-file flow).
 - **FR-052**: The parser MUST accept the multi-table column syntax — type in parenthesized form (`number(id)`), constraints as a list (`constraints: [primary_key, required, unique, foreign_key]`), ranges as `[min, max]`, `source: { parquet: path }`, and per-column/table `description` — in addition to the original single-table forms. Foreign-key targets MAY be resolved from a top-level `relationships:` list.
+- **FR-053**: Reconciliation MUST accept the physical encodings real Parquet files use for each dictionary type (e.g. INT32/INT64 identifiers, `INT32(DATE)` dates, integer or floating-point quantities, text or integer-keyed categories), and the tool MUST coerce loaded values to the dictionary's canonical carrier so editing, validation, and saving stay consistent.
+- **FR-054**: Each table MUST keep its own scroll position: switching to another table shows it from its last position (a freshly viewed table starts at the top), and returning restores the previous position.
+- **FR-055**: Appending a row MUST scroll the new (last) row into view.
 
 ### Key Entities *(include if feature involves data)*
 

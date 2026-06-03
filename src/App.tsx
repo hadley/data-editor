@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { toColumns } from "./schema/toColumns.ts";
+import { parseTables } from "./schema/parse.ts";
 import { reconcile } from "./schema/reconcile.ts";
 import { coerceRows } from "./schema/coerce.ts";
 import { readParquet } from "./io/readParquet.ts";
@@ -43,6 +44,10 @@ export function App() {
   const tableTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataGridRef = useRef<DataGridHandle>(null);
+  // Per-tab scroll position (first visible row), so each table keeps its own scroll.
+  const scrollRows = useRef<Record<number, number>>({});
+  const activeRef = useRef(active);
+  const suppressScrollSave = useRef(false);
 
   const current = tabs[active] as Tab | undefined;
   const workbook = current?.workbook ?? null;
@@ -58,18 +63,33 @@ export function App() {
     return () => unsubscribe.current?.();
   }, [workbook]);
 
-  // Reset per-tab transient UI on tab switch.
+  // On tab switch: reset transient UI and restore this tab's saved scroll position.
   useEffect(() => {
+    activeRef.current = active;
     setActiveCell(null);
     setMenu(null);
     setCardIndex(0);
+    suppressScrollSave.current = true; // ignore scroll events fired during the switch
+    const target = scrollRows.current[active] ?? 0;
+    const raf = requestAnimationFrame(() => {
+      dataGridRef.current?.scrollToRow(target);
+      suppressScrollSave.current = false;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [active]);
+
+  const onVisibleRowChange = useCallback((firstRow: number) => {
+    (window as unknown as { __visibleRow?: number }).__visibleRow = firstRow;
+    if (suppressScrollSave.current) return;
+    scrollRows.current[activeRef.current] = firstRow;
+  }, []);
 
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < PHONE_MAX_WIDTH);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
 
   const anyDirty = tabs.some((t) => t.workbook?.dirty);
   const totalViolations = tabs.reduce((n, t) => n + (t.workbook?.violationCount() ?? 0), 0);
@@ -88,6 +108,7 @@ export function App() {
 
   const handleLoaded = useCallback(async (loaded: LoadedTable[]) => {
     setError(null);
+    scrollRows.current = {}; // fresh scroll state per dataset
     const built: Tab[] = [];
     for (const { dict, bytes, origin: o } of loaded) {
       const name = dict.name ?? "table";
@@ -109,6 +130,21 @@ export function App() {
     setTabs(built);
     setActive(0);
   }, []);
+
+  // Test hook: load tables from raw dict text + Parquet bytes (no file pickers).
+  useEffect(() => {
+    (window as unknown as { __loadForTest?: (items: { dictText: string; bytes: number[] }[]) => void }).__loadForTest = (
+      items,
+    ) => {
+      void handleLoaded(
+        items.map((it) => ({
+          dict: parseTables(it.dictText)[0],
+          bytes: new Uint8Array(it.bytes),
+          origin: { kind: "download", name: "test.parquet" } as SaveOrigin,
+        })),
+      );
+    };
+  }, [handleLoaded]);
 
   const silentSave = useCallback(async () => {
     if (!workbook || !origin || origin.kind !== "tauri") return;
@@ -148,6 +184,7 @@ export function App() {
   const handleAddRow = useCallback(() => {
     workbook?.addRow();
     afterMutate();
+    requestAnimationFrame(() => dataGridRef.current?.scrollToBottom()); // reveal the new row
   }, [workbook, afterMutate]);
 
   const handleUndo = useCallback(() => {
@@ -207,6 +244,7 @@ export function App() {
     setActive(0);
     setActiveCell(null);
     setMenu(null);
+    scrollRows.current = {};
   }, [anyDirty, totalViolations]);
 
   const handleSave = useCallback(async () => {
@@ -308,6 +346,7 @@ export function App() {
               onHeaderHover={setHeaderDetail}
               onSelectCell={setActiveCell}
               onRowContextMenu={(row, x, y) => setMenu({ row, x, y })}
+              onVisibleRowChange={onVisibleRowChange}
             />
           )
         ) : reconcileError ? (

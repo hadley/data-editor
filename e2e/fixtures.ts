@@ -35,6 +35,26 @@ const dir = mkdtempSync(join(tmpdir(), "de-e2e-"));
 export const PARQUET = join(dir, "foodbank.parquet");
 writeFileSync(PARQUET, new Uint8Array(parquetWriteBuffer({ columnData })));
 
+// A tall single-table dataset (raw text + bytes) for scroll tests, loaded via __loadForTest.
+function tallParquet(n: number): number[] {
+  const ids: string[] = [];
+  for (let i = 0; i < n; i++) ids.push(`R-${String(i).padStart(4, "0")}`);
+  const buf = parquetWriteBuffer({
+    columnData: [
+      { name: "id", type: "STRING" as const, data: ids },
+      { name: "n", type: "INT64" as const, nullable: true, data: ids.map((_, i) => BigInt(i)) },
+    ],
+  });
+  return Array.from(new Uint8Array(buf));
+}
+export const TALL_DICT = `name: tall\ncolumns:\n  - {name: id, type: number(id)}\n  - {name: n, type: number(ordinal)}\n`;
+export const TALL_BYTES_A = tallParquet(80);
+export const TALL_BYTES_B = tallParquet(80);
+export const TWO_TABLE_DICTS = [
+  { name: "alpha", text: `name: alpha\ncolumns:\n  - {name: id, type: number(id)}\n  - {name: n, type: number(ordinal)}\n` },
+  { name: "beta", text: `name: beta\ncolumns:\n  - {name: id, type: number(id)}\n  - {name: n, type: number(ordinal)}\n` },
+];
+
 // A multi-table dictionary (new format) for exercising the multi-table open branch.
 export const MULTI_DICT = join(dir, "multi-dict.yaml");
 writeFileSync(
