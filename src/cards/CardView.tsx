@@ -62,8 +62,16 @@ function Field({
   invalid: boolean;
   onChange: (value: CellValue) => void;
 }) {
+  const missing = value === null || value === undefined || value === "";
   const border = invalid ? "1px solid #c00" : "1px solid #ccc";
-  const style = { width: "100%", padding: "6px 8px", border, borderRadius: 4, boxSizing: "border-box" as const };
+  const style = {
+    width: "100%",
+    padding: "6px 8px",
+    border,
+    background: !invalid && missing ? "#fff1de" : undefined, // subtle orange for missing
+    borderRadius: 4,
+    boxSizing: "border-box" as const,
+  };
 
   if (def.kind === "boolean") {
     return (

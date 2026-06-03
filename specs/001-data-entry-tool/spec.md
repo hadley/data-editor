@@ -201,6 +201,7 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-046**: Inserting or deleting a row MUST keep validation correct by re-evaluating after the row indices shift.
 - **FR-047**: Closing a dataset with unsaved changes or outstanding validation problems MUST prompt for confirmation before discarding.
 - **FR-048**: Numeric columns MUST be right-aligned and decimal-aligned — values in a numeric (quantity) column are shown with a consistent number of decimal places so the decimal points line up; integers are right-aligned.
+- **FR-049**: Pressing Delete or Backspace on the selected cell(s) MUST set them to a missing (null) value, as one undoable action. Missing values MUST have a subtle distinct style (e.g., an orange tint) in both the grid and the card view.
 
 ### Key Entities *(include if feature involves data)*
 

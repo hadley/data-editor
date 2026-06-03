@@ -84,6 +84,23 @@ test("selection clamps to an existing row after undoing an added row", async ({ 
   await expect.poll(async () => (await selCell(page))?.[1]).toBeLessThanOrEqual(3);
 });
 
+test("pressing Delete clears the selected cell to a missing value (undoable)", async ({ page }) => {
+  await open(page);
+  const cell0 = () =>
+    page.evaluate(() => (window as unknown as { __wb?: { rows: Record<string, unknown>[] } }).__wb?.rows[0].client_id);
+  expect(await cell0()).toBe("C-0001");
+
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + 90, box.y + 53); // select row 0, client_id
+  await expect.poll(() => selCell(page)).toEqual([0, 0]);
+  await page.keyboard.press("Delete");
+  await expect.poll(() => cell0()).toBeNull();
+
+  await page.keyboard.press("Meta+z"); // undoable
+  await expect.poll(() => cell0()).toBe("C-0001");
+});
+
 test("right-click offers insert and delete row", async ({ page }) => {
   await open(page);
   expect(await rowCount(page)).toBe(4);

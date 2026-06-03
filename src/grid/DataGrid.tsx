@@ -62,6 +62,7 @@ interface Props {
 
 const INVALID_CELL_BG = "#ffd5d5";
 const INVALID_ROW_BG = "#fca5a5"; // reddens the row-number marker (row theme bgCell)
+const MISSING_BG = "#fff1de"; // subtle orange tint for missing (null) values
 const ZEBRA_BG = "#f7f7f8"; // subtle striping on alternating rows
 const NEUTRAL_BG = "#ffffff";
 const HEADER_HEIGHT = 48; // two lines: name + type
@@ -202,6 +203,10 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
       if (cellIssue?.(rowIdx, def.name)) {
         return { ...base, themeOverride: { bgCell: INVALID_CELL_BG } } as GridCell;
       }
+      // Missing (null/empty) but valid → subtle orange.
+      if (value === null || value === undefined || value === "") {
+        return { ...base, themeOverride: { bgCell: MISSING_BG } } as GridCell;
+      }
       // In an invalid row the row theme reddens everything (incl. the marker); keep the
       // valid data cells normal so only the row number reads red.
       if (rowHasIssue?.(rowIdx)) {
@@ -249,6 +254,34 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   );
 
   const hoveredCell = useRef<readonly [number, number] | null>(null);
+
+  // Delete/Backspace clears the selected cell(s) to a missing value (null), undoable.
+  const onDelete = useCallback(
+    (sel: GridSelection): boolean => {
+      if (!onEditCells) return true; // let Glide handle if we can't batch
+      const cols = columnsRef.current;
+      const nRows = rowsRef.current.length;
+      const seen = new Set<string>();
+      const edits: GridEdit[] = [];
+      const add = (r: number, c: number) => {
+        if (r < 0 || r >= nRows || c < 0 || c >= cols.length) return;
+        const k = `${r}:${c}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        edits.push({ row: r, col: cols[c].name, value: null });
+      };
+      const range = sel.current?.range;
+      if (range) {
+        for (let r = range.y; r < range.y + range.height; r++)
+          for (let c = range.x; c < range.x + range.width; c++) add(r, c);
+      }
+      for (const r of sel.rows) for (let c = 0; c < cols.length; c++) add(r, c);
+      for (const c of sel.columns) for (let r = 0; r < nRows; r++) add(r, c);
+      if (edits.length > 0) onEditCells(edits);
+      return false; // handled
+    },
+    [onEditCells],
+  );
 
   const onItemHovered = useCallback(
     (args: GridMouseEventArgs) => {
@@ -378,6 +411,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
           getCellContent={getCellContent}
           onCellEdited={onCellEdited}
           onCellsEdited={onCellsEdited}
+          onDelete={onDelete}
           onColumnResize={onColumnResize}
           getCellsForSelection={getCellsForSelection}
           getRowThemeOverride={getRowThemeOverride}
