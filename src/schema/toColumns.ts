@@ -92,8 +92,9 @@ function detailFor(c: Column): string {
     else if (max !== undefined) parts.push(`≤ ${max}`);
   }
   if (c.type === "enum" && c.values) parts.push(`one of: ${c.values.map((v) => v.label).join(", ")}`);
-  if (c.foreign_key) parts.push(`→ ${c.foreign_key.table}.${c.foreign_key.column}`);
-  return `${c.name} · ${parts.join(" · ")}`;
+  if (c.foreign_key && c.foreign_key.table) parts.push(`→ ${c.foreign_key.table}.${c.foreign_key.column}`);
+  const head = `${c.name} · ${parts.join(" · ")}`;
+  return c.description ? `${head} — ${c.description}` : head;
 }
 
 /** Look up an enum label for display; falls back to the raw value. */

@@ -34,13 +34,20 @@ export interface Column {
   unique: boolean;
   primary_key: boolean;
   foreign_key: ForeignKeyRef | null;
+  /** Free-text column description from the dictionary, if any. */
+  description: string | null;
 }
 
-/** Parsed dictionary — authoritative description of the table. */
+/**
+ * Parsed dictionary for ONE table — authoritative description of that table.
+ * A multi-table `data-dict.yaml` parses into several of these (one per `tables:` entry).
+ */
 export interface DataDict {
   name: string | null;
-  /** Data file(s) this dictionary describes, if declared (FR-038). */
+  /** Data file(s) this table is sourced from, if declared (FR-038), relative to the dict dir. */
   source: string[];
+  /** Free-text table description, if any. */
+  description: string | null;
   columns: Column[];
 }
 

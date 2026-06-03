@@ -34,3 +34,19 @@ const columnData = [
 const dir = mkdtempSync(join(tmpdir(), "de-e2e-"));
 export const PARQUET = join(dir, "foodbank.parquet");
 writeFileSync(PARQUET, new Uint8Array(parquetWriteBuffer({ columnData })));
+
+// A multi-table dictionary (new format) for exercising the multi-table open branch.
+export const MULTI_DICT = join(dir, "multi-dict.yaml");
+writeFileSync(
+  MULTI_DICT,
+  `tables:
+  account:
+    source: { parquet: raw-data/account.parquet }
+    columns:
+      - { name: account_id, type: number(id), constraints: [primary_key] }
+  district:
+    source: { parquet: raw-data/district.parquet }
+    columns:
+      - { name: district_id, type: number(id), constraints: [primary_key] }
+`,
+);

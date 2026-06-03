@@ -203,6 +203,12 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-048**: Numeric columns MUST be right-aligned and decimal-aligned — values in a numeric (quantity) column are shown with a consistent number of decimal places so the decimal points line up; integers are right-aligned.
 - **FR-049**: Pressing Delete or Backspace on the selected cell(s) MUST set them to a missing (null) value, as one undoable action. Missing values MUST have a subtle distinct style (e.g., an orange tint) in both the grid and the card view.
 
+#### Multi-table dictionaries
+
+- **FR-050**: A `data-dict.yaml` MAY describe multiple tables under a `tables:` map. The tool MUST open one tab per table, each with its own grid, validation, undo history, and save target, switchable without losing edits in the others.
+- **FR-051**: Each table's `source` MUST be resolved relative to the directory containing the `data-dict.yaml`, not the current working directory. On desktop the tool reads every table's source automatically; in the browser it resolves them within a user-chosen folder (single-table dictionaries keep the single-file flow).
+- **FR-052**: The parser MUST accept the multi-table column syntax — type in parenthesized form (`number(id)`), constraints as a list (`constraints: [primary_key, required, unique, foreign_key]`), ranges as `[min, max]`, `source: { parquet: path }`, and per-column/table `description` — in addition to the original single-table forms. Foreign-key targets MAY be resolved from a top-level `relationships:` list.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Dictionary**: The authoritative description of the table. Contains an ordered list of column definitions and is the source of truth for columns, types, constraints, presentation, and saved-file structure.

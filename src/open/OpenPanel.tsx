@@ -1,129 +1,100 @@
-// OpenPanel.tsx — step-by-step file opening (one control per file).
-// Browser: real <input type=file> elements (also what Playwright drives).
-// Tauri: native dialog buttons (so we keep a path for in-place save).
+// OpenPanel.tsx — step-by-step opening. A data-dict.yaml may describe one table or many.
+//   Desktop (Tauri): pick the dictionary; every table's source is read automatically.
+//   Browser: pick the dictionary, then pick the data file (single table) or the data
+//   folder (multiple tables) so sources can be resolved relative to the dictionary.
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useRef, useState } from "react";
-import {
-  isTauri,
-  openDictTauri,
-  openParquetTauri,
-  readSiblingTauri,
-  type SaveOrigin,
-} from "../platform/files.ts";
-import { parse } from "../schema/parse.ts";
-
-/** Best-effort: pull `source` file names from dictionary text without throwing. */
-function sourceNames(dictText: string): string[] {
-  try {
-    return parse(dictText).source;
-  } catch {
-    return [];
-  }
-}
-
-export interface LoadedFiles {
-  dictText: string;
-  parquetBytes: Uint8Array;
-  origin: SaveOrigin;
-}
+import { isTauri, openDictTauri, type SaveOrigin } from "../platform/files.ts";
+import { parseTables } from "../schema/parse.ts";
+import { loadTablesFromDir, loadTablesTauri, type LoadedTable } from "./load.ts";
 
 interface Props {
-  onLoaded: (files: LoadedFiles) => void;
+  onLoaded: (tables: LoadedTable[]) => void;
   onError: (message: string) => void;
 }
 
 export function OpenPanel({ onLoaded, onError }: Props) {
-  const [dictText, setDictText] = useState<string | null>(null);
-  const [dictName, setDictName] = useState<string | null>(null);
-  const [parquet, setParquet] = useState<{ bytes: Uint8Array; origin: SaveOrigin } | null>(null);
-  const [parquetName, setParquetName] = useState<string | null>(null);
-  const [sourceHint, setSourceHint] = useState<string | null>(null);
   const tauri = isTauri();
-
-  const tryOpen = useCallback(
-    (d: string | null, p: { bytes: Uint8Array; origin: SaveOrigin } | null) => {
-      if (d !== null && p !== null) onLoaded({ dictText: d, parquetBytes: p.bytes, origin: p.origin });
-    },
-    [onLoaded],
-  );
-
-  // --- Browser: file inputs ---
+  const [dictText, setDictText] = useState<string | null>(null);
+  const [tableNames, setTableNames] = useState<string[]>([]);
   const dictInput = useRef<HTMLInputElement>(null);
-  const parquetInput = useRef<HTMLInputElement>(null);
+  const dataInput = useRef<HTMLInputElement>(null);
 
+  const fail = useCallback((e: unknown) => onError(e instanceof Error ? e.message : String(e)), [onError]);
+
+  // --- Desktop: one click loads the dictionary and every table's data. ---
+  const openTauri = useCallback(async () => {
+    try {
+      const { text, path } = await openDictTauri();
+      onLoaded(await loadTablesTauri(text, path));
+    } catch (e) {
+      fail(e);
+    }
+  }, [onLoaded, fail]);
+
+  // --- Browser: choose the dictionary first. ---
   const onDictFile = useCallback(
     async (file: File | undefined) => {
       if (!file) return;
-      const text = await file.text();
-      setDictText(text);
-      setDictName(file.name);
-      setSourceHint(sourceNames(text)[0] ?? null); // can't auto-read by path in the browser
-      tryOpen(text, parquet);
-    },
-    [parquet, tryOpen],
-  );
-
-  const onParquetFile = useCallback(
-    async (file: File | undefined) => {
-      if (!file) return;
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const next = { bytes, origin: { kind: "download" as const, name: file.name } };
-      setParquet(next);
-      setParquetName(file.name);
-      tryOpen(dictText, next);
-    },
-    [dictText, tryOpen],
-  );
-
-  // --- Tauri: native dialogs ---
-  const pickDictTauri = useCallback(async () => {
-    try {
-      const { text, path } = await openDictTauri();
-      setDictText(text);
-      setDictName(path.split("/").pop() ?? "dictionary.yaml");
-      // Auto-load the data file named in `source`, resolved next to the dict (FR-038).
-      const names = sourceNames(text);
-      setSourceHint(names[0] ?? null);
-      if (names[0]) {
-        try {
-          const { bytes, origin } = await readSiblingTauri(path, names[0]);
-          const next = { bytes, origin };
-          setParquet(next);
-          setParquetName(names[0]);
-          tryOpen(text, next);
-          return;
-        } catch {
-          /* fall back to manual selection */
-        }
+      try {
+        const text = await file.text();
+        const tables = parseTables(text);
+        setDictText(text);
+        setTableNames(tables.map((t) => t.name ?? "table"));
+      } catch (e) {
+        fail(e);
       }
-      tryOpen(text, parquet);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }, [parquet, tryOpen, onError]);
+    },
+    [fail],
+  );
 
-  const pickParquetTauri = useCallback(async () => {
+  // Single-table: choose the one data file.
+  const onDataFile = useCallback(
+    async (file: File | undefined) => {
+      if (!file || dictText === null) return;
+      try {
+        const [dict] = parseTables(dictText);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        onLoaded([{ dict, bytes, origin: { kind: "download", name: file.name } satisfies SaveOrigin }]);
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [dictText, onLoaded, fail],
+  );
+
+  // Multiple tables: choose the folder that contains the data files.
+  const chooseFolder = useCallback(async () => {
+    if (dictText === null) return;
     try {
-      const { bytes, origin } = await openParquetTauri();
-      const next = { bytes, origin };
-      setParquet(next);
-      setParquetName(origin.kind === "tauri" ? origin.path.split("/").pop() ?? "data.parquet" : "data.parquet");
-      tryOpen(dictText, next);
+      const picker = (window as any).showDirectoryPicker;
+      if (typeof picker !== "function") {
+        onError("This browser can't pick a folder — use the desktop app for multi-table dictionaries.");
+        return;
+      }
+      const dir = await picker();
+      onLoaded(await loadTablesFromDir(dictText, dir));
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
-  }, [dictText, tryOpen, onError]);
+  }, [dictText, onLoaded, onError, fail]);
+
+  const multi = tableNames.length > 1;
 
   return (
-    <div style={{ padding: 32, maxWidth: 460, margin: "0 auto", fontFamily: "system-ui" }}>
+    <div style={{ padding: 32, maxWidth: 480, margin: "0 auto", fontFamily: "system-ui" }}>
       <h2 style={{ marginTop: 0 }}>Open a dataset</h2>
-      <p style={{ color: "#666" }}>Choose a dictionary and its Parquet data file.</p>
 
-      <Step n={1} label="Dictionary (.yaml)" done={dictText !== null} doneName={dictName}>
-        {tauri ? (
-          <button onClick={pickDictTauri}>Choose dictionary…</button>
-        ) : (
-          <>
+      {tauri ? (
+        <>
+          <p style={{ color: "#666" }}>Choose a <code>data-dict.yaml</code>. Every table's data is loaded automatically.</p>
+          <button onClick={openTauri}>Open dictionary…</button>
+        </>
+      ) : (
+        <>
+          <Step n={1} label="Dictionary (.yaml)" done={dictText !== null} doneName={dictText ? `${tableNames.length} table${tableNames.length === 1 ? "" : "s"}` : null}>
             <button onClick={() => dictInput.current?.click()}>Choose dictionary…</button>
             <input
               ref={dictInput}
@@ -133,34 +104,29 @@ export function OpenPanel({ onLoaded, onError }: Props) {
               style={{ display: "none" }}
               onChange={(e) => onDictFile(e.target.files?.[0])}
             />
-          </>
-        )}
-      </Step>
+          </Step>
 
-      <Step
-        n={2}
-        label={sourceHint ? `Data (.parquet) — expecting ${sourceHint}` : "Data (.parquet)"}
-        done={parquet !== null}
-        doneName={parquetName}
-      >
-        {tauri ? (
-          <button onClick={pickParquetTauri}>Choose data file…</button>
-        ) : (
-          <>
-            <button onClick={() => parquetInput.current?.click()}>Choose data file…</button>
-            <input
-              ref={parquetInput}
-              data-testid="parquet-input"
-              type="file"
-              accept=".parquet"
-              style={{ display: "none" }}
-              onChange={(e) => onParquetFile(e.target.files?.[0])}
-            />
-          </>
-        )}
-      </Step>
+          {dictText !== null && !multi && (
+            <Step n={2} label="Data (.parquet)" done={false} doneName={null}>
+              <button onClick={() => dataInput.current?.click()}>Choose data file…</button>
+              <input
+                ref={dataInput}
+                data-testid="parquet-input"
+                type="file"
+                accept=".parquet"
+                style={{ display: "none" }}
+                onChange={(e) => onDataFile(e.target.files?.[0])}
+              />
+            </Step>
+          )}
 
-      <p style={{ color: "#999", fontSize: 13 }}>The grid opens automatically once both files are chosen.</p>
+          {dictText !== null && multi && (
+            <Step n={2} label={`Data folder for ${tableNames.length} tables`} done={false} doneName={tableNames.join(", ")}>
+              <button onClick={chooseFolder}>Choose data folder…</button>
+            </Step>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -198,7 +164,7 @@ function Step({
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
-        {done && doneName && <div style={{ color: "#16a34a", fontSize: 12 }}>{doneName}</div>}
+        {doneName && <div style={{ color: "#16a34a", fontSize: 12 }}>{doneName}</div>}
       </div>
       {children}
     </div>

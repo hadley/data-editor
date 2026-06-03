@@ -1,8 +1,7 @@
-// App.tsx — toolbar + file tab + (grid | card view | open panel). Only the data area
-// scrolls; the toolbar and tab stay fixed.
+// App.tsx — workspace of one or more tables (tabs), each its own editable grid.
+// Toolbar + tab bar stay fixed; only the data area scrolls.
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { parse } from "./schema/parse.ts";
 import { toColumns } from "./schema/toColumns.ts";
 import { reconcile } from "./schema/reconcile.ts";
 import { readParquet } from "./io/readParquet.ts";
@@ -12,16 +11,22 @@ import { Workbook } from "./state/workbook.ts";
 import { DataGrid, type DataGridHandle } from "./grid/DataGrid.tsx";
 import { ReconcileError } from "./grid/ReconcileError.tsx";
 import { CardView } from "./cards/CardView.tsx";
-import { OpenPanel, type LoadedFiles } from "./open/OpenPanel.tsx";
+import { OpenPanel } from "./open/OpenPanel.tsx";
+import type { LoadedTable } from "./open/load.ts";
 import type { CellValue, ReconcileResult } from "./schema/types.ts";
 
 const PHONE_MAX_WIDTH = 600;
 
+interface Tab {
+  name: string;
+  workbook: Workbook | null; // null when reconciliation failed
+  reconcileError: ReconcileResult | null;
+  origin: SaveOrigin | null;
+}
+
 export function App() {
-  const [workbook, setWorkbook] = useState<Workbook | null>(null);
-  const [origin, setOrigin] = useState<SaveOrigin | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [reconcileError, setReconcileError] = useState<ReconcileResult | null>(null);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [active, setActive] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hoverMsg, setHoverMsg] = useState<string | null>(null);
   const [headerDetail, setHeaderDetail] = useState<string | null>(null);
@@ -38,16 +43,26 @@ export function App() {
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataGridRef = useRef<DataGridHandle>(null);
 
-  // Autosave only where we can overwrite in place (never repeatedly download).
+  const current = tabs[active] as Tab | undefined;
+  const workbook = current?.workbook ?? null;
+  const origin = current?.origin ?? null;
+  const reconcileError = current?.reconcileError ?? null;
   const canAutosave = origin?.kind === "tauri";
 
+  // Subscribe to the active workbook so edits re-render.
   useEffect(() => {
     unsubscribe.current?.();
     unsubscribe.current = workbook?.subscribe(forceRender) ?? null;
-    // Test hook: lets e2e read live workbook state.
     (window as unknown as { __wb?: Workbook | null }).__wb = workbook;
     return () => unsubscribe.current?.();
   }, [workbook]);
+
+  // Reset per-tab transient UI on tab switch.
+  useEffect(() => {
+    setActiveCell(null);
+    setMenu(null);
+    setCardIndex(0);
+  }, [active]);
 
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < PHONE_MAX_WIDTH);
@@ -55,38 +70,41 @@ export function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Unsaved-edit guard (FR-019a).
+  const anyDirty = tabs.some((t) => t.workbook?.dirty);
+  const totalViolations = tabs.reduce((n, t) => n + (t.workbook?.violationCount() ?? 0), 0);
+
+  // Unsaved-edit guard (FR-019a) — across all tabs.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (workbook?.dirty) {
+      if (anyDirty) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [workbook]);
+  }, [anyDirty]);
 
-  const handleLoaded = useCallback((files: LoadedFiles) => {
+  const handleLoaded = useCallback(async (loaded: LoadedTable[]) => {
     setError(null);
-    setReconcileError(null);
-    try {
-      const dict = parse(files.dictText);
-      void readParquet(files.parquetBytes).then(({ schemaElements, rows }) => {
+    const built: Tab[] = [];
+    for (const { dict, bytes, origin: o } of loaded) {
+      const name = dict.name ?? "table";
+      try {
+        const { schemaElements, rows } = await readParquet(bytes);
         const result = reconcile(schemaElements, dict);
         if (!result.ok) {
-          setWorkbook(null);
-          setReconcileError(result);
-          return;
+          built.push({ name, workbook: null, reconcileError: result, origin: null });
+        } else {
+          built.push({ name, workbook: new Workbook(dict, rows), reconcileError: null, origin: o });
         }
-        setWorkbook(new Workbook(dict, rows));
-        setOrigin(files.origin);
-        setFileName(dict.name ?? (files.origin.kind === "download" ? files.origin.name : "data"));
-        setCardIndex(0);
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      } catch (err) {
+        setError(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+        built.push({ name, workbook: null, reconcileError: null, origin: null });
+      }
     }
+    setTabs(built);
+    setActive(0);
   }, []);
 
   const silentSave = useCallback(async () => {
@@ -99,7 +117,6 @@ export function App() {
     }
   }, [workbook, origin]);
 
-  // Debounced cross-row revalidation + (optional) autosave after edits settle.
   const afterMutate = useCallback(() => {
     if (tableTimer.current) clearTimeout(tableTimer.current);
     tableTimer.current = setTimeout(() => workbook?.recomputeTable(), 300);
@@ -140,6 +157,23 @@ export function App() {
     afterMutate();
   }, [workbook, afterMutate]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!workbook) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
+      } else if (mod && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [workbook, handleUndo, handleRedo]);
+
   const insertAt = useCallback(
     (at: number) => {
       workbook?.insertRow(at);
@@ -159,21 +193,36 @@ export function App() {
   );
 
   const handleClose = useCallback(() => {
-    if (workbook && (workbook.dirty || workbook.violationCount() > 0)) {
+    if (anyDirty || totalViolations > 0) {
       const msg =
-        workbook.violationCount() > 0
-          ? `This dataset has ${workbook.violationCount()} validation problem${
-              workbook.violationCount() === 1 ? "" : "s"
-            } and may not be fully saved. Close and discard changes?`
+        totalViolations > 0
+          ? `This workspace has ${totalViolations} validation problem${totalViolations === 1 ? "" : "s"} and may not be fully saved. Close and discard changes?`
           : "Discard unsaved changes and close?";
       if (!window.confirm(msg)) return;
     }
-    setWorkbook(null);
-    setOrigin(null);
-    setReconcileError(null);
+    setTabs([]);
+    setActive(0);
     setActiveCell(null);
     setMenu(null);
-  }, [workbook]);
+  }, [anyDirty, totalViolations]);
+
+  const handleSave = useCallback(async () => {
+    if (!workbook || !origin) return;
+    setError(null);
+    const count = workbook.violationCount();
+    if (count > 0) {
+      const ok = window.confirm(
+        `There ${count === 1 ? "is" : "are"} ${count} outstanding validation problem${count === 1 ? "" : "s"}. Save anyway?`,
+      );
+      if (!ok) return;
+    }
+    try {
+      await saveBytes(writeParquet(workbook.rows, workbook.schema), origin);
+      workbook.markSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [workbook, origin]);
 
   const jumpToFirstProblem = useCallback(() => {
     const cell = workbook?.firstViolationCell();
@@ -182,59 +231,22 @@ export function App() {
     else dataGridRef.current?.focusCell(cell.row, cell.col);
   }, [workbook, isNarrow]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!workbook) return;
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) handleRedo();
-        else handleUndo();
-      } else if (mod && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        handleRedo();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [workbook, handleUndo, handleRedo]);
-
-  const handleSave = useCallback(async () => {
-    if (!workbook || !origin) return;
-    setError(null);
-    const count = workbook.violationCount();
-    if (count > 0) {
-      const ok = window.confirm(
-        `There ${count === 1 ? "is" : "are"} ${count} outstanding validation problem${
-          count === 1 ? "" : "s"
-        }. Save anyway?`,
-      );
-      if (!ok) return;
-    }
-    try {
-      const bytes = writeParquet(workbook.rows, workbook.schema);
-      await saveBytes(bytes, origin);
-      workbook.markSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [workbook, origin]);
-
   const columns = workbook ? toColumns(workbook.dict.columns) : [];
   const violationCount = workbook?.violationCount() ?? 0;
 
-  // Status bar: the active cell's validation error takes priority, then header-hover
-  // type details, then a cell-hover message.
   const activeIssue = activeCell ? (workbook?.cellIssue(activeCell.row, activeCell.col) ?? null) : null;
   const statusText = activeIssue
     ? `⚠ ${activeCell!.col} (row ${activeCell!.row + 1}): ${activeIssue.message}`
     : (headerDetail ?? hoverMsg ?? "");
   const statusIsError = !!activeIssue;
 
+  const hasWorkspace = tabs.length > 0;
+
   return (
     <div style={shell}>
       <Toolbar
         hasWorkbook={!!workbook}
+        hasWorkspace={hasWorkspace}
         dirty={workbook?.dirty ?? false}
         canUndo={workbook?.canUndo() ?? false}
         canRedo={workbook?.canRedo() ?? false}
@@ -251,9 +263,20 @@ export function App() {
         onClose={handleClose}
       />
 
-      {workbook && (
+      {hasWorkspace && (
         <div style={tabBar}>
-          <div style={tab}>{fileName || "table"}</div>
+          {tabs.map((t, i) => (
+            <button
+              key={`${t.name}-${i}`}
+              style={i === active ? { ...tab, ...tabActive } : tab}
+              onClick={() => setActive(i)}
+              title={t.name}
+            >
+              {t.name}
+              {t.workbook?.dirty ? " ●" : ""}
+              {t.reconcileError ? " ⚠" : t.workbook && t.workbook.violationCount() > 0 ? " •" : ""}
+            </button>
+          ))}
         </div>
       )}
 
@@ -285,9 +308,11 @@ export function App() {
             />
           )
         ) : reconcileError ? (
-          <ReconcileError result={reconcileError} onDismiss={() => setReconcileError(null)} />
+          <ReconcileError result={reconcileError} onDismiss={handleClose} />
+        ) : hasWorkspace ? (
+          <p style={{ padding: 16, color: "#666" }}>This table could not be loaded.</p>
         ) : (
-          <OpenPanel onLoaded={handleLoaded} onError={setError} />
+          <OpenPanel onLoaded={(t) => void handleLoaded(t)} onError={setError} />
         )}
       </main>
 
@@ -301,12 +326,8 @@ export function App() {
         <>
           <div style={menuOverlay} onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
           <div style={{ ...menuBox, left: menu.x, top: menu.y }} role="menu" data-testid="row-menu">
-            <button style={menuItem} onClick={() => insertAt(menu.row)}>
-              Insert row above
-            </button>
-            <button style={menuItem} onClick={() => insertAt(menu.row + 1)}>
-              Insert row below
-            </button>
+            <button style={menuItem} onClick={() => insertAt(menu.row)}>Insert row above</button>
+            <button style={menuItem} onClick={() => insertAt(menu.row + 1)}>Insert row below</button>
             <div style={{ height: 1, background: "#eee", margin: "4px 0" }} />
             <button style={{ ...menuItem, color: "#c00" }} onClick={() => deleteAt(menu.row)}>
               Delete row {menu.row + 1}
@@ -320,6 +341,7 @@ export function App() {
 
 function Toolbar(props: {
   hasWorkbook: boolean;
+  hasWorkspace: boolean;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -335,7 +357,7 @@ function Toolbar(props: {
   onJumpToProblem: () => void;
   onClose: () => void;
 }) {
-  if (!props.hasWorkbook) {
+  if (!props.hasWorkspace) {
     return (
       <header style={toolbar}>
         {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
@@ -344,20 +366,17 @@ function Toolbar(props: {
   }
   return (
     <header style={toolbar}>
-      <button className="tb-btn" onClick={props.onAddRow} title="Append a row">
+      <button className="tb-btn" onClick={props.onAddRow} disabled={!props.hasWorkbook} title="Append a row">
         ＋ Row
       </button>
       <span style={sep} />
-      <button className="tb-btn" onClick={props.onUndo} disabled={!props.canUndo} title="Undo (⌘Z)">
-        ↶
-      </button>
-      <button className="tb-btn" onClick={props.onRedo} disabled={!props.canRedo} title="Redo (⇧⌘Z)">
-        ↷
-      </button>
+      <button className="tb-btn" onClick={props.onUndo} disabled={!props.canUndo} title="Undo (⌘Z)">↶</button>
+      <button className="tb-btn" onClick={props.onRedo} disabled={!props.canRedo} title="Redo (⇧⌘Z)">↷</button>
       <span style={sep} />
       <button
         className={props.dirty ? "tb-btn tb-btn--primary" : "tb-btn"}
         onClick={props.onSave}
+        disabled={!props.hasWorkbook}
         title="Save"
       >
         Save{props.dirty ? " ●" : ""}
@@ -378,9 +397,7 @@ function Toolbar(props: {
       )}
       {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
       <span style={sep} />
-      <button className="tb-btn" onClick={props.onClose} title="Close this dataset">
-        ✕ Close
-      </button>
+      <button className="tb-btn" onClick={props.onClose} title="Close this workspace">✕ Close</button>
     </header>
   );
 }
@@ -408,17 +425,21 @@ const tabBar: React.CSSProperties = {
   borderBottom: "1px solid #ddd",
   background: "#f3f4f6",
   flexShrink: 0,
+  overflowX: "auto",
 };
 const tab: React.CSSProperties = {
   padding: "6px 14px",
-  background: "white",
+  background: "#e9eaee",
   border: "1px solid #ddd",
   borderBottom: "none",
   borderRadius: "6px 6px 0 0",
   marginTop: 4,
   fontSize: 13,
-  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  color: "#444",
 };
+const tabActive: React.CSSProperties = { background: "white", fontWeight: 600, color: "#111" };
 const dataArea: React.CSSProperties = { flex: 1, minHeight: 0, overflow: "hidden", position: "relative" };
 const statusBar: React.CSSProperties = {
   flexShrink: 0,
