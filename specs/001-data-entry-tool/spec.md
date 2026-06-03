@@ -191,6 +191,11 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-036**: The outstanding-violations indicator MUST be actionable: activating it MUST move the selection to (and scroll to) the first violating cell.
 - **FR-037**: Rows containing a validation problem MUST be visually marked at the row indicator (e.g., a red row-number background), so problem rows are scannable.
 - **FR-038**: The dictionary MAY declare a `source` naming the data file(s) it describes. After the dictionary is chosen, the tool MUST use `source` to auto-load the data file when it can resolve the path (desktop), or to show the expected file name as a hint (browser).
+- **FR-039**: The tool MUST show a status bar that displays the exact validation error for the currently selected cell; when no cell error applies it MAY show the hovered column's type details or be empty.
+- **FR-040**: Keyboard cell navigation MUST zigzag row to row: Tab off the far-right cell moves to the first cell of the next row (appending a row past the last row, FR-033), and Shift+Tab off the far-left cell moves to the last cell of the previous row.
+- **FR-041**: After rows are removed (e.g., undoing an added row), the selection MUST move to a still-existing row rather than pointing at a row that no longer exists.
+- **FR-042**: When a cell editor (such as an enum dropdown) is open, Tab MUST first commit the editor before moving the selection.
+- **FR-043**: A column's type indicator MUST appear after the column name in the header, and hovering the header MUST reveal fuller type details (constraints, range, allowed values).
 
 ### Key Entities *(include if feature involves data)*
 

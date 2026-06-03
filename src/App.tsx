@@ -24,6 +24,8 @@ export function App() {
   const [reconcileError, setReconcileError] = useState<ReconcileResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverMsg, setHoverMsg] = useState<string | null>(null);
+  const [headerDetail, setHeaderDetail] = useState<string | null>(null);
+  const [activeCell, setActiveCell] = useState<{ row: number; col: string } | null>(null);
   const [cardIndex, setCardIndex] = useState(0);
   const [autosaveOn, setAutosaveOn] = useState(true);
   const [isNarrow, setIsNarrow] = useState(
@@ -185,6 +187,14 @@ export function App() {
   const columns = workbook ? toColumns(workbook.dict.columns) : [];
   const violationCount = workbook?.violationCount() ?? 0;
 
+  // Status bar: the active cell's validation error takes priority, then header-hover
+  // type details, then a cell-hover message.
+  const activeIssue = activeCell ? (workbook?.cellIssue(activeCell.row, activeCell.col) ?? null) : null;
+  const statusText = activeIssue
+    ? `⚠ ${activeCell!.col} (row ${activeCell!.row + 1}): ${activeIssue.message}`
+    : (headerDetail ?? hoverMsg ?? "");
+  const statusIsError = !!activeIssue;
+
   return (
     <div style={shell}>
       <Toolbar
@@ -193,7 +203,6 @@ export function App() {
         canUndo={workbook?.canUndo() ?? false}
         canRedo={workbook?.canRedo() ?? false}
         violationCount={violationCount}
-        hoverMsg={hoverMsg}
         error={error}
         autosaveOn={autosaveOn}
         canAutosave={canAutosave}
@@ -238,6 +247,8 @@ export function App() {
               cellIssue={(r, c) => workbook.cellIssue(r, c)}
               rowHasIssue={(r) => workbook.rowHasIssue(r)}
               onHover={setHoverMsg}
+              onHeaderHover={setHeaderDetail}
+              onSelectCell={setActiveCell}
             />
           )
         ) : reconcileError ? (
@@ -246,6 +257,12 @@ export function App() {
           <OpenPanel onLoaded={handleLoaded} onError={setError} />
         )}
       </main>
+
+      {workbook && (
+        <footer style={{ ...statusBar, color: statusIsError ? "#c00" : "#555" }} data-testid="status-bar">
+          {statusText || <span style={{ color: "#aaa" }}>Ready</span>}
+        </footer>
+      )}
     </div>
   );
 }
@@ -256,7 +273,6 @@ function Toolbar(props: {
   canUndo: boolean;
   canRedo: boolean;
   violationCount: number;
-  hoverMsg: string | null;
   error: string | null;
   autosaveOn: boolean;
   canAutosave: boolean;
@@ -299,7 +315,6 @@ function Toolbar(props: {
               {props.violationCount} problem{props.violationCount === 1 ? "" : "s"} →
             </button>
           )}
-          {props.hoverMsg && <span style={{ color: "#c00", fontSize: 13 }}>{props.hoverMsg}</span>}
         </>
       )}
       {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
@@ -342,6 +357,17 @@ const tab: React.CSSProperties = {
   fontWeight: 600,
 };
 const dataArea: React.CSSProperties = { flex: 1, minHeight: 0, overflow: "hidden", position: "relative" };
+const statusBar: React.CSSProperties = {
+  flexShrink: 0,
+  borderTop: "1px solid #ddd",
+  background: "#fafafa",
+  padding: "4px 12px",
+  fontSize: 12,
+  fontFamily: "system-ui, sans-serif",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
 const sep: React.CSSProperties = { width: 1, height: 20, background: "#ddd", margin: "0 4px" };
 const badgeBtn: React.CSSProperties = {
   background: "#fee2e2",

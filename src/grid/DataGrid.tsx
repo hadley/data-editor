@@ -15,7 +15,6 @@ import {
 import {
   CompactSelection,
   DataEditor,
-  GridColumnIcon,
   type DataEditorRef,
   type EditableGridCell,
   type EditListItem,
@@ -54,34 +53,49 @@ interface Props {
   cellIssue?: (row: number, col: string) => Violation | null;
   rowHasIssue?: (row: number) => boolean;
   onHover?: (message: string | null) => void;
+  onHeaderHover?: (detail: string | null) => void;
+  onSelectCell?: (cell: { row: number; col: string } | null) => void;
   freezeColumns?: number;
 }
 
-const INVALID_BG = "#ffe5e5";
-const INVALID_ROW_HEADER = "#fecaca";
+const INVALID_CELL_BG = "#ffd5d5";
+const INVALID_ROW_BG = "#fca5a5"; // reddens the row-number marker (row theme bgCell)
+const NEUTRAL_BG = "#ffffff";
 const HEADER_HEIGHT = 36;
 const ROW_HEIGHT = 34;
 const ICON_PX = 30;
 
-function iconFor(kind: CellKind, typeLabel: string): GridColumnIcon {
+function glyphFor(kind: CellKind, typeLabel: string): string {
   switch (kind) {
     case "number":
-      return GridColumnIcon.HeaderNumber;
+      return "#";
     case "boolean":
-      return GridColumnIcon.HeaderBoolean;
+      return "☑";
     case "date":
-      return GridColumnIcon.HeaderDate;
+      return "📅";
     case "datetime":
-      return GridColumnIcon.HeaderTime;
+      return "🕒";
     case "enum":
-      return GridColumnIcon.HeaderLookup;
+      return "▾";
     default:
-      return typeLabel === "id" ? GridColumnIcon.HeaderRowID : GridColumnIcon.HeaderString;
+      return typeLabel === "id" ? "🔑" : typeLabel === "integer" ? "#" : "T";
   }
 }
 
 export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
-  { columns, rows, onEdit, onEditCells, onAppendRow, cellIssue, rowHasIssue, onHover, freezeColumns = 1 },
+  {
+    columns,
+    rows,
+    onEdit,
+    onEditCells,
+    onAppendRow,
+    cellIssue,
+    rowHasIssue,
+    onHover,
+    onHeaderHover,
+    onSelectCell,
+    freezeColumns = 1,
+  },
   ref,
 ) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -142,12 +156,49 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   const gridColumns: GridColumn[] = useMemo(
     () =>
       columns.map((c) => ({
-        title: c.foreignKey ? `${c.title} → ${c.foreignKey.table}.${c.foreignKey.column}` : c.title,
+        title: c.title,
         id: c.name,
         width: widths[c.name] ?? 160,
-        icon: iconFor(c.kind, c.typeLabel),
       })),
     [columns, widths],
+  );
+
+  const glyphById = useMemo(
+    () => new Map(columns.map((c) => [c.name, glyphFor(c.kind, c.typeLabel)])),
+    [columns],
+  );
+
+  // Draw the header as "name  <type glyph>" — type icon AFTER the name (FR-030).
+  const drawHeader = useCallback(
+    (args: {
+      ctx: CanvasRenderingContext2D;
+      column: GridColumn;
+      rect: { x: number; y: number; width: number; height: number };
+      theme: Theme;
+    }) => {
+      const { ctx, column, rect, theme } = args;
+      const padX = 8;
+      const midY = rect.y + rect.height / 2;
+      const headerFont =
+        (theme as unknown as { headerFontFull?: string }).headerFontFull ??
+        `${theme.headerFontStyle} ${theme.fontFamily}`;
+      ctx.save();
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = theme.textHeader;
+      ctx.font = headerFont;
+      const title = column.title;
+      ctx.fillText(title, rect.x + padX, midY);
+      const titleW = ctx.measureText(title).width;
+      const glyph = column.id ? glyphById.get(column.id) : undefined;
+      if (glyph) {
+        ctx.fillStyle = theme.textLight;
+        ctx.font = `13px ${theme.fontFamily}`;
+        ctx.fillText(glyph, rect.x + padX + titleW + 6, midY);
+      }
+      ctx.restore();
+      return true;
+    },
+    [glyphById],
   );
 
   const onColumnResize = useCallback((column: GridColumn, newSize: number) => {
@@ -161,11 +212,16 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
       const value = rows[rowIdx]?.[def.name] ?? null;
       const base = toGridCell(def, value);
       if (cellIssue?.(rowIdx, def.name)) {
-        return { ...base, themeOverride: { bgCell: INVALID_BG } } as GridCell;
+        return { ...base, themeOverride: { bgCell: INVALID_CELL_BG } } as GridCell;
+      }
+      // In an invalid row the row theme reddens everything (incl. the marker); keep the
+      // valid data cells normal so only the row number reads red.
+      if (rowHasIssue?.(rowIdx)) {
+        return { ...base, themeOverride: { bgCell: NEUTRAL_BG } } as GridCell;
       }
       return base;
     },
-    [columns, rows, cellIssue],
+    [columns, rows, cellIssue, rowHasIssue],
   );
 
   const onCellEdited = useCallback(
@@ -206,6 +262,13 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
 
   const onItemHovered = useCallback(
     (args: GridMouseEventArgs) => {
+      if (args.kind === "header") {
+        const def = columns[args.location[0]];
+        onHeaderHover?.(def?.detail ?? null);
+        onHover?.(null);
+        return;
+      }
+      onHeaderHover?.(null);
       if (!onHover) return;
       if (args.kind !== "cell") {
         onHover(null);
@@ -216,7 +279,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
       const issue = def ? cellIssue?.(rowIdx, def.name) : null;
       onHover(issue ? issue.message : null);
     },
-    [columns, cellIssue, onHover],
+    [columns, cellIssue, onHover, onHeaderHover],
   );
 
   const selectCell = useCallback((col: number, row: number) => {
@@ -233,30 +296,65 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   // phase so we intercept before Glide's own Tab navigation.
   const onWrapperKeyDownCapture = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key !== "Tab" || e.shiftKey) return;
+      if (e.key !== "Tab") return;
+      // If a cell editor (e.g. an enum dropdown) is open, let it commit and move first
+      // (FR: complete active dropdowns before moving).
+      const portal = document.getElementById("portal");
+      if (portal && portal.childElementCount > 0) return;
+
       const cur = selectionRef.current.current?.cell;
       if (!cur) return;
       const lastCol = columnsRef.current.length - 1;
-      if (cur[0] !== lastCol) return; // not at the end of a row — let Glide move right
+
+      if (e.shiftKey) {
+        // Shift+Tab off the far-left wraps to the far-right of the previous row (zigzag).
+        if (cur[0] !== 0) return; // not at far-left — let Glide move left
+        if (cur[1] === 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          return; // top-left: nowhere to go
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        selectCell(lastCol, cur[1] - 1);
+        return;
+      }
+
+      // Forward Tab off the far-right wraps to the next row (appends on the last row).
+      if (cur[0] !== lastCol) return; // let Glide move right
       const lastRow = rowsRef.current.length - 1;
       if (cur[1] === lastRow) {
-        if (!onAppendRow) return; // nothing to append into
+        if (!onAppendRow) return;
         e.preventDefault();
         e.stopPropagation();
         onAppendRow();
-        selectCell(0, rowsRef.current.length); // the row being appended
+        selectCell(0, rowsRef.current.length);
       } else {
         e.preventDefault();
         e.stopPropagation();
-        selectCell(0, cur[1] + 1); // wrap to next row, first column
+        selectCell(0, cur[1] + 1);
       }
     },
     [onAppendRow, selectCell],
   );
 
+  // Keep the selection on an existing row after rows shrink (e.g. undo of add-row).
+  useEffect(() => {
+    const cur = selectionRef.current.current?.cell;
+    if (!cur) return;
+    if (rows.length === 0) {
+      const empty = { columns: CompactSelection.empty(), rows: CompactSelection.empty() };
+      selectionRef.current = empty;
+      setGridSelectionState(empty);
+      onSelectCell?.(null);
+    } else if (cur[1] >= rows.length) {
+      selectCell(Math.min(cur[0], Math.max(columns.length - 1, 0)), rows.length - 1);
+    }
+  }, [rows.length, columns.length, selectCell, onSelectCell]);
+
   const getRowThemeOverride = useCallback(
     (row: number): Partial<Theme> | undefined =>
-      rowHasIssue?.(row) ? { bgHeader: INVALID_ROW_HEADER, bgHeaderHasFocus: INVALID_ROW_HEADER } : undefined,
+      rowHasIssue?.(row) ? { bgCell: INVALID_ROW_BG } : undefined,
     [rowHasIssue],
   );
 
@@ -284,8 +382,14 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
           getRowThemeOverride={getRowThemeOverride}
           onItemHovered={onItemHovered}
           customRenderers={allCells}
+          drawHeader={drawHeader}
           gridSelection={gridSelection}
-          onGridSelectionChange={setGridSelection}
+          onGridSelectionChange={(s) => {
+            setGridSelection(s);
+            const cell = s.current?.cell;
+            const def = cell ? columnsRef.current[cell[0]] : undefined;
+            onSelectCell?.(def && cell ? { row: cell[1], col: def.name } : null);
+          }}
           onRowAppended={onAppendRow ? () => void onAppendRow() : undefined}
           trailingRowOptions={onAppendRow ? { sticky: false, tint: true } : undefined}
           rowMarkers="number"

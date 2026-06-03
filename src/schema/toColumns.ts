@@ -13,6 +13,8 @@ export interface GridColumnDef {
   title: string;
   /** Short human label for the dictionary type, shown in the header/card (FR-030). */
   typeLabel: string;
+  /** Full one-line description for the header hover (type + constraints + range). */
+  detail: string;
   kind: CellKind;
   /** For enum columns: the allowed options (label shown, value stored). */
   enumValues: EnumValue[] | null;
@@ -29,6 +31,7 @@ export function toColumns(columns: Column[]): GridColumnDef[] {
     name: c.name,
     title: c.name,
     typeLabel: typeLabelFor(c),
+    detail: detailFor(c),
     kind: cellKindFor(c),
     enumValues: c.values,
     placeholder: c.examples && c.examples.length > 0 ? c.examples.join(", ") : null,
@@ -73,6 +76,24 @@ function typeLabelFor(c: Column): string {
     case "enum":
       return "enum";
   }
+}
+
+function detailFor(c: Column): string {
+  const parts: string[] = [typeLabelFor(c)];
+  if (c.primary_key) parts.push("primary key");
+  else {
+    if (c.required) parts.push("required");
+    if (c.unique) parts.push("unique");
+  }
+  if (c.range) {
+    const { min, max } = c.range;
+    if (min !== undefined && max !== undefined) parts.push(`${min}–${max}`);
+    else if (min !== undefined) parts.push(`≥ ${min}`);
+    else if (max !== undefined) parts.push(`≤ ${max}`);
+  }
+  if (c.type === "enum" && c.values) parts.push(`one of: ${c.values.map((v) => v.label).join(", ")}`);
+  if (c.foreign_key) parts.push(`→ ${c.foreign_key.table}.${c.foreign_key.column}`);
+  return `${c.name} · ${parts.join(" · ")}`;
 }
 
 /** Look up an enum label for display; falls back to the raw value. */

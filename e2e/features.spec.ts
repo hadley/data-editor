@@ -60,6 +60,45 @@ test("Tab off the end of a row wraps to the first column of the next row", async
   expect(await rowCount(page)).toBe(4); // no row appended (not the last row)
 });
 
+test("Shift+Tab from the far-left cell wraps to the far-right of the previous row", async ({ page }) => {
+  await open(page);
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + 100, box.y + 53); // row 0, col 0
+  await page.keyboard.press("ArrowDown"); // → [0,1]
+  await expect.poll(() => selCell(page)).toEqual([0, 1]);
+  await page.keyboard.press("Shift+Tab"); // wrap up-and-right
+  await expect.poll(() => selCell(page)).toEqual([8, 0]);
+});
+
+test("selection clamps to an existing row after undoing an added row", async ({ page }) => {
+  await open(page);
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + 100, box.y + 53);
+  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
+  for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight");
+  await expect.poll(() => selCell(page)).toEqual([8, 3]);
+  await page.keyboard.press("Tab"); // append row 4, selection → [0,4]
+  await expect.poll(() => selCell(page)).toEqual([0, 4]);
+  await page.keyboard.press("Meta+z"); // undo the add → row 4 no longer exists
+  await expect.poll(() => rowCount(page)).toBe(4);
+  // Selection must move back onto an existing row (not row index 4).
+  await expect.poll(async () => (await selCell(page))?.[1]).toBeLessThanOrEqual(3);
+});
+
+test("status bar shows the exact validation error for the selected cell", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const wb = (window as unknown as { __wb?: { setCell: (r: number, c: string, v: unknown) => void } }).__wb;
+    wb?.setCell(0, "client_id", null); // primary key → required
+  });
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + 80, box.y + 53); // select row 0, first column (client_id)
+  await expect(page.getByTestId("status-bar")).toContainText(/client_id.*required/i, { timeout: 3000 });
+});
+
 test("a validation problem surfaces a clickable badge that jumps to it", async ({ page }) => {
   await open(page);
 
