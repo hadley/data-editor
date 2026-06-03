@@ -44,39 +44,51 @@ export function reconcile(schemaElements: SchemaElementInfo[], dict: DataDict): 
   return { ok, missingColumns, extraColumns, typeMismatch };
 }
 
+// Compatibility is generous: a dictionary type accepts every Parquet physical encoding
+// it can be read from (real files store ids/dates/quantities as INT32, etc.); values are
+// coerced to the dictionary's canonical carrier on load.
 function isCompatible(col: Column, found: Physical): boolean {
-  const isTimestamp = (found.converted ?? "").startsWith("TIMESTAMP");
+  const conv = found.converted ?? "";
+  const t = found.type;
+  const isTimestamp = conv.startsWith("TIMESTAMP");
+  const isDate = conv === "DATE";
+  const isInt = t === "INT32" || t === "INT64" || t === "INT96";
+  const isFloat = t === "FLOAT" || t === "DOUBLE";
+  const isText = t === "BYTE_ARRAY" || t === "FIXED_LEN_BYTE_ARRAY";
   switch (col.type) {
     case "string":
-    case "date":
+      return isText;
     case "enum":
-      return found.type === "BYTE_ARRAY";
-    case "number":
-      if (col.subtype === "id") return found.type === "BYTE_ARRAY" || found.type === "INT64";
-      if (col.subtype === "quantity") return found.type === "DOUBLE" || found.type === "FLOAT";
-      // ordinal: a plain integer, not a timestamp masquerading as INT64
-      return (found.type === "INT64" || found.type === "INT32") && !isTimestamp;
+      return isText || isInt; // text keys, or dictionary-encoded integer keys
     case "boolean":
-      return found.type === "BOOLEAN";
+      return t === "BOOLEAN";
+    case "date":
+      return (t === "INT32" && isDate) || isText; // DATE-encoded int, or ISO string
     case "datetime":
-      return found.type === "INT64" && isTimestamp;
+      return (isInt && isTimestamp) || t === "INT96" || isText;
+    case "number":
+      if (col.subtype === "id") return isInt || isText;
+      if (col.subtype === "quantity") return isFloat || isInt;
+      return isInt && !isTimestamp && !isDate; // ordinal: a plain integer
   }
 }
 
 function expectedLabel(col: Column): string {
   switch (col.type) {
     case "string":
-    case "date":
+      return "text";
     case "enum":
-      return "string (BYTE_ARRAY/UTF8)";
-    case "number":
-      if (col.subtype === "id") return "string or integer";
-      if (col.subtype === "quantity") return "number (DOUBLE)";
-      return "integer (INT64)";
+      return "category (text or integer key)";
     case "boolean":
-      return "boolean (BOOLEAN)";
+      return "boolean";
+    case "date":
+      return "date (DATE int or text)";
     case "datetime":
-      return "timestamp (INT64/TIMESTAMP)";
+      return "timestamp";
+    case "number":
+      if (col.subtype === "id") return "integer or text id";
+      if (col.subtype === "quantity") return "number";
+      return "integer";
   }
 }
 

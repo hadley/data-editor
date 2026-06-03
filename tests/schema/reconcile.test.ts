@@ -100,6 +100,36 @@ describe("reconcile", () => {
     expect(result.typeMismatch?.found).toContain("INT64");
   });
 
+  it("accepts real Parquet encodings: INT32 ids, INT32(DATE) dates, INT32 quantities", () => {
+    // Mirrors the loan-application files' physical schema (id/date/amount as INT32).
+    const dict = parse(
+      [
+        "columns:",
+        "  - {name: account_id, type: number(id), constraints: [primary_key]}",
+        "  - {name: date, type: date}",
+        "  - {name: amount, type: number(quantity)}",
+        "  - {name: duration, type: number(ordinal)}",
+        "  - {name: status, type: enum, values: [A, B]}",
+      ].join("\n"),
+    );
+    const schemaElements = [
+      { name: "root" },
+      { name: "account_id", type: "INT32", converted_type: "INT_32" },
+      { name: "date", type: "INT32", converted_type: "DATE" },
+      { name: "amount", type: "INT32", converted_type: "INT_32" },
+      { name: "duration", type: "INT32", converted_type: "INT_32" },
+      { name: "status", type: "BYTE_ARRAY", converted_type: "UTF8" },
+    ];
+    expect(reconcile(schemaElements, dict).ok).toBe(true);
+  });
+
+  it("still rejects a genuinely wrong type (text column stored as INT32)", () => {
+    const dict = parse("columns:\n  - {name: s, type: string}");
+    const result = reconcile([{ name: "root" }, { name: "s", type: "INT32" }], dict);
+    expect(result.ok).toBe(false);
+    expect(result.typeMismatch?.column).toBe("s");
+  });
+
   it("distinguishes datetime (TIMESTAMP) from a plain ordinal INT64", async () => {
     const fileSchema = await schemaOf([sampleRow]);
     // dict claims `dt` is an ordinal integer, but file stored it as TIMESTAMP

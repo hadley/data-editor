@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { toColumns } from "./schema/toColumns.ts";
 import { reconcile } from "./schema/reconcile.ts";
+import { coerceRows } from "./schema/coerce.ts";
 import { readParquet } from "./io/readParquet.ts";
 import { writeParquet } from "./io/writeParquet.ts";
 import { saveBytes, type SaveOrigin } from "./platform/files.ts";
@@ -96,7 +97,9 @@ export function App() {
         if (!result.ok) {
           built.push({ name, workbook: null, reconcileError: result, origin: null });
         } else {
-          built.push({ name, workbook: new Workbook(dict, rows), reconcileError: null, origin: o });
+          // Coerce file values to the dictionary's canonical carriers (e.g. INT32 id → text).
+          const wb = new Workbook(dict, coerceRows(dict.columns, rows));
+          built.push({ name, workbook: wb, reconcileError: null, origin: o });
         }
       } catch (err) {
         setError(`${name}: ${err instanceof Error ? err.message : String(err)}`);
