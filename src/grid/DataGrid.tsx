@@ -112,6 +112,12 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     setWidths(measureColumns(columnsRef.current, rowsRef.current, ICON_PX));
   }, [colKey]);
 
+  // Test hook: expose the currently selected cell.
+  useEffect(() => {
+    (window as unknown as { __gridSel?: readonly [number, number] | null }).__gridSel =
+      gridSelection.current?.cell ?? null;
+  }, [gridSelection]);
+
   useImperativeHandle(ref, () => ({
     focusCell: (row: number, col: string) => {
       const colIdx = columnsRef.current.findIndex((c) => c.name === col);
@@ -206,6 +212,31 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     [columns, cellIssue, onHover],
   );
 
+  // Tab on the bottom-right cell appends a row and moves into it (FR-033).
+  // Handled in the capture phase so we intercept before Glide's own Tab navigation.
+  const onWrapperKeyDownCapture = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Tab" || e.shiftKey || !onAppendRow) return;
+      const cur = gridSelection.current?.cell;
+      if (!cur) return;
+      const lastCol = columnsRef.current.length - 1;
+      const lastRow = rowsRef.current.length - 1;
+      if (cur[0] === lastCol && cur[1] === lastRow) {
+        e.preventDefault();
+        e.stopPropagation();
+        onAppendRow();
+        const newRow = rowsRef.current.length; // index of the row being appended
+        setGridSelection({
+          columns: CompactSelection.empty(),
+          rows: CompactSelection.empty(),
+          current: { cell: [0, newRow], range: { x: 0, y: newRow, width: 1, height: 1 }, rangeStack: [] },
+        });
+        editorRef.current?.scrollTo(0, newRow);
+      }
+    },
+    [gridSelection, onAppendRow],
+  );
+
   const getRowThemeOverride = useCallback(
     (row: number): Partial<Theme> | undefined =>
       rowHasIssue?.(row) ? { bgHeader: INVALID_ROW_HEADER, bgHeaderHasFocus: INVALID_ROW_HEADER } : undefined,
@@ -216,7 +247,11 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   const gridHeight = Math.max(HEADER_HEIGHT + ROW_HEIGHT, Math.min(contentHeight, size.height));
 
   return (
-    <div ref={wrapperRef} style={{ width: "100%", height: "100%", background: "#f3f4f6" }}>
+    <div
+      ref={wrapperRef}
+      style={{ width: "100%", height: "100%", background: "#f3f4f6" }}
+      onKeyDownCapture={onWrapperKeyDownCapture}
+    >
       {size.width > 0 && (
         <DataEditor
           ref={editorRef}

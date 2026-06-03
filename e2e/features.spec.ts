@@ -28,6 +28,22 @@ test("add row, then undo with keyboard, restores the count (full undo stack)", a
   await expect.poll(() => rowCount(page)).toBe(5);
 });
 
+test("Tab on the bottom-right cell appends a new row", async ({ page }) => {
+  await open(page);
+  expect(await rowCount(page)).toBe(4);
+
+  // Click into a data cell, then walk to the bottom-right (3 rows down, 8 cols right
+  // for the 4-row × 9-col fixture), and Tab to append.
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + 100, box.y + 53); // row 0, first data column
+  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
+  for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Tab");
+
+  await expect.poll(() => rowCount(page)).toBe(5);
+});
+
 test("a validation problem surfaces a clickable badge that jumps to it", async ({ page }) => {
   await open(page);
 
