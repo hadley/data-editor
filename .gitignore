@@ -21,3 +21,8 @@ Thumbs.db
 
 # Tauri generated schemas
 src-tauri/gen/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/

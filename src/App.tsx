@@ -1,5 +1,5 @@
-// App.tsx — load (happy path), edit, add rows, and save (US1).
-// Reconciliation gate (US2), live validation (US3), and conveniences (US4) come later.
+// App.tsx — toolbar + file tab + (grid | card view | open panel). Only the data area
+// scrolls; the toolbar and tab stay fixed.
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { parse } from "./schema/parse.ts";
@@ -7,11 +7,12 @@ import { toColumns } from "./schema/toColumns.ts";
 import { reconcile } from "./schema/reconcile.ts";
 import { readParquet } from "./io/readParquet.ts";
 import { writeParquet } from "./io/writeParquet.ts";
-import { openFiles, saveBytes, type SaveOrigin } from "./platform/files.ts";
+import { saveBytes, type SaveOrigin } from "./platform/files.ts";
 import { Workbook } from "./state/workbook.ts";
 import { DataGrid } from "./grid/DataGrid.tsx";
 import { ReconcileError } from "./grid/ReconcileError.tsx";
 import { CardView } from "./cards/CardView.tsx";
+import { OpenPanel, type LoadedFiles } from "./open/OpenPanel.tsx";
 import type { CellValue, ReconcileResult } from "./schema/types.ts";
 
 const PHONE_MAX_WIDTH = 600;
@@ -19,6 +20,7 @@ const PHONE_MAX_WIDTH = 600;
 export function App() {
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
   const [origin, setOrigin] = useState<SaveOrigin | null>(null);
+  const [fileName, setFileName] = useState<string>("");
   const [reconcileError, setReconcileError] = useState<ReconcileResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverMsg, setHoverMsg] = useState<string | null>(null);
@@ -30,21 +32,21 @@ export function App() {
   const unsubscribe = useRef<(() => void) | null>(null);
   const tableTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Re-render whenever the workbook notifies (edits, add row, save).
   useEffect(() => {
     unsubscribe.current?.();
     unsubscribe.current = workbook?.subscribe(forceRender) ?? null;
+    // Test hook: lets e2e read live workbook state.
+    (window as unknown as { __wb?: Workbook | null }).__wb = workbook;
     return () => unsubscribe.current?.();
   }, [workbook]);
 
-  // Responsive switch: grid on desktop/tablet, card view on phone widths (FR-028).
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < PHONE_MAX_WIDTH);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Unsaved-edit guard (FR-019a): warn before leaving with pending changes.
+  // Unsaved-edit guard (FR-019a).
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (workbook?.dirty) {
@@ -56,28 +58,28 @@ export function App() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [workbook]);
 
-  const handleOpen = useCallback(async () => {
+  const handleLoaded = useCallback((files: LoadedFiles) => {
     setError(null);
     setReconcileError(null);
     try {
-      const files = await openFiles();
-      const dict = parse(files.dict);
-      const { schemaElements, rows } = await readParquet(files.parquet);
-      // Reconciliation gate (US2): block opening on any mismatch (FR-003–FR-007).
-      const result = reconcile(schemaElements, dict);
-      if (!result.ok) {
-        setWorkbook(null);
-        setReconcileError(result);
-        return;
-      }
-      setWorkbook(new Workbook(dict, rows));
-      setOrigin(files.origin);
+      const dict = parse(files.dictText);
+      void readParquet(files.parquetBytes).then(({ schemaElements, rows }) => {
+        const result = reconcile(schemaElements, dict);
+        if (!result.ok) {
+          setWorkbook(null);
+          setReconcileError(result);
+          return;
+        }
+        setWorkbook(new Workbook(dict, rows));
+        setOrigin(files.origin);
+        setFileName(dict.name ?? (files.origin.kind === "download" ? files.origin.name : "data"));
+        setCardIndex(0);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
-  // Debounced cross-row (unique/pk) revalidation after edits settle (FR-015, R8).
   const scheduleTable = useCallback(() => {
     if (tableTimer.current) clearTimeout(tableTimer.current);
     tableTimer.current = setTimeout(() => workbook?.recomputeTable(), 300);
@@ -109,7 +111,6 @@ export function App() {
     scheduleTable();
   }, [workbook, scheduleTable]);
 
-  // Keyboard undo/redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z or Ctrl+Y).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!workbook) return;
@@ -130,7 +131,6 @@ export function App() {
   const handleSave = useCallback(async () => {
     if (!workbook || !origin) return;
     setError(null);
-    // Warn + require confirmation when violations remain (FR-020).
     const count = workbook.violationCount();
     if (count > 0) {
       const ok = window.confirm(
@@ -153,36 +153,33 @@ export function App() {
   const violationCount = workbook?.violationCount() ?? 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "system-ui" }}>
-      <header style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 12px", borderBottom: "1px solid #ddd" }}>
-        <strong>Data Entry Tool</strong>
-        <button onClick={handleOpen}>Open…</button>
-        <button onClick={() => workbook?.addRow()} disabled={!workbook}>
-          Add row
-        </button>
-        <button onClick={handleUndo} disabled={!workbook?.canUndo()}>
-          Undo
-        </button>
-        <button onClick={handleRedo} disabled={!workbook?.canRedo()}>
-          Redo
-        </button>
-        <button onClick={handleSave} disabled={!workbook}>
-          Save{workbook?.dirty ? " *" : ""}
-        </button>
-        {workbook && (
-          <span style={{ color: "#666" }}>
-            {workbook.dict.name ?? "table"} · {workbook.rows.length} rows
-          </span>
-        )}
-        {violationCount > 0 && (
-          <span style={{ color: "#c00" }}>
-            {violationCount} validation problem{violationCount === 1 ? "" : "s"}
-          </span>
-        )}
-        {hoverMsg && <span style={{ color: "#c00" }}>· {hoverMsg}</span>}
-        {error && <span style={{ color: "#c00" }}>⚠ {error}</span>}
-      </header>
-      <main style={{ flex: 1, minHeight: 0 }}>
+    <div style={shell}>
+      <Toolbar
+        hasWorkbook={!!workbook}
+        dirty={workbook?.dirty ?? false}
+        canUndo={workbook?.canUndo() ?? false}
+        canRedo={workbook?.canRedo() ?? false}
+        violationCount={violationCount}
+        hoverMsg={hoverMsg}
+        error={error}
+        onAddRow={() => workbook?.addRow()}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onSave={handleSave}
+        onClose={() => {
+          setWorkbook(null);
+          setOrigin(null);
+          setReconcileError(null);
+        }}
+      />
+
+      {workbook && (
+        <div style={tabBar}>
+          <div style={tab}>{fileName || "table"}</div>
+        </div>
+      )}
+
+      <main style={dataArea}>
         {workbook ? (
           isNarrow ? (
             <CardView
@@ -206,11 +203,100 @@ export function App() {
         ) : reconcileError ? (
           <ReconcileError result={reconcileError} onDismiss={() => setReconcileError(null)} />
         ) : (
-          <p style={{ padding: 16, color: "#666" }}>
-            Open a Parquet file and its <code>data-dict.yaml</code> to begin.
-          </p>
+          <OpenPanel onLoaded={handleLoaded} onError={setError} />
         )}
       </main>
     </div>
   );
 }
+
+function Toolbar(props: {
+  hasWorkbook: boolean;
+  dirty: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  violationCount: number;
+  hoverMsg: string | null;
+  error: string | null;
+  onAddRow: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <header style={toolbar}>
+      <strong style={{ marginRight: 8 }}>Data Entry Tool</strong>
+      {props.hasWorkbook && (
+        <>
+          <button onClick={props.onAddRow}>+ Row</button>
+          <span style={sep} />
+          <button onClick={props.onUndo} disabled={!props.canUndo} title="Undo (⌘Z)">
+            ↶ Undo
+          </button>
+          <button onClick={props.onRedo} disabled={!props.canRedo} title="Redo (⇧⌘Z)">
+            ↷ Redo
+          </button>
+          <span style={sep} />
+          <button onClick={props.onSave} style={props.dirty ? primaryBtn : undefined}>
+            Save{props.dirty ? " ●" : ""}
+          </button>
+          <button onClick={props.onClose}>Close</button>
+          <span style={{ flex: 1 }} />
+          {props.violationCount > 0 && (
+            <span style={badge}>
+              {props.violationCount} problem{props.violationCount === 1 ? "" : "s"}
+            </span>
+          )}
+          {props.hoverMsg && <span style={{ color: "#c00", fontSize: 13 }}>{props.hoverMsg}</span>}
+        </>
+      )}
+      {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
+    </header>
+  );
+}
+
+const shell: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  height: "100vh",
+  overflow: "hidden",
+  fontFamily: "system-ui, sans-serif",
+};
+const toolbar: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 12px",
+  borderBottom: "1px solid #ddd",
+  background: "#fafafa",
+  flexShrink: 0,
+};
+const tabBar: React.CSSProperties = {
+  display: "flex",
+  gap: 2,
+  padding: "0 8px",
+  borderBottom: "1px solid #ddd",
+  background: "#f3f4f6",
+  flexShrink: 0,
+};
+const tab: React.CSSProperties = {
+  padding: "6px 14px",
+  background: "white",
+  border: "1px solid #ddd",
+  borderBottom: "none",
+  borderRadius: "6px 6px 0 0",
+  marginTop: 4,
+  fontSize: 13,
+  fontWeight: 600,
+};
+const dataArea: React.CSSProperties = { flex: 1, minHeight: 0, overflow: "hidden", position: "relative" };
+const sep: React.CSSProperties = { width: 1, height: 20, background: "#ddd", margin: "0 4px" };
+const badge: React.CSSProperties = {
+  background: "#fee2e2",
+  color: "#c00",
+  borderRadius: 10,
+  padding: "2px 8px",
+  fontSize: 12,
+};
+const primaryBtn: React.CSSProperties = { background: "#4f46e5", color: "white", border: "1px solid #4f46e5" };

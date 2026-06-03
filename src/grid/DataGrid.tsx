@@ -1,8 +1,9 @@
-// DataGrid.tsx — Glide Data Grid bound to the workbook (US1).
-// Cell kinds derive from toColumns. Date/datetime/enum render as text in v1
-// (full date pickers / dropdowns require the glide-data-grid-cells addon — later).
+// DataGrid.tsx — Glide Data Grid bound to the workbook.
+// Numeric width/height (measured from the container — strings like "100%" break Glide's
+// hit-testing/editing), resizable columns sized to their widest value, and a grey
+// background below the data so short tables don't show empty rows.
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DataEditor,
   type EditableGridCell,
@@ -17,6 +18,7 @@ import "@glideapps/glide-data-grid/dist/index.css";
 import { type GridColumnDef } from "../schema/toColumns.ts";
 import type { CellValue, Row, Violation } from "../schema/types.ts";
 import { fromGridCell, toGridCell } from "./cellMapping.ts";
+import { measureColumns } from "./columnWidth.ts";
 
 export interface GridEdit {
   row: number;
@@ -28,17 +30,15 @@ interface Props {
   columns: GridColumnDef[];
   rows: Row[];
   onEdit: (row: number, col: string, value: CellValue) => void;
-  /** Apply many edits as one undoable unit (paste / fill-down). */
   onEditCells?: (edits: GridEdit[]) => void;
-  /** Look up a validation issue for a cell (US3); invalid cells are highlighted. */
   cellIssue?: (row: number, col: string) => Violation | null;
-  /** Notified with a cell's validation message on hover (FR-017). */
   onHover?: (message: string | null) => void;
-  /** Freeze the header (always) plus this many leading key columns. */
   freezeColumns?: number;
 }
 
 const INVALID_BG = "#ffe5e5";
+const HEADER_HEIGHT = 36;
+const ROW_HEIGHT = 34;
 
 export function DataGrid({
   columns,
@@ -49,16 +49,46 @@ export function DataGrid({
   onHover,
   freezeColumns = 1,
 }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  // Measure the container so the grid gets numeric dimensions.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const update = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Resizable column widths: seed from content, then let the user drag (issue: resizable + capped).
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const colKey = columns.map((c) => c.name).join("|");
+  // Re-seed widths only when the column set changes, not on every edit
+  // (so a user's manual resize survives edits). `rows` is read for initial sizing only.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+  useEffect(() => {
+    setWidths(measureColumns(columnsRef.current, rowsRef.current));
+  }, [colKey]);
+
   const gridColumns: GridColumn[] = useMemo(
     () =>
       columns.map((c) => ({
-        // foreign_key is informational only in v1 (FR-013) — surfaced in the header title.
         title: c.foreignKey ? `${c.title} → ${c.foreignKey.table}.${c.foreignKey.column}` : c.title,
         id: c.name,
-        width: 160,
+        width: widths[c.name] ?? 160,
       })),
-    [columns],
+    [columns, widths],
   );
+
+  const onColumnResize = useCallback((column: GridColumn, newSize: number) => {
+    if (column.id) setWidths((w) => ({ ...w, [column.id as string]: newSize }));
+  }, []);
 
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
@@ -83,7 +113,6 @@ export function DataGrid({
     [columns, onEdit],
   );
 
-  // Enables copy and fill-pattern computations (Glide reads the source rectangle).
   const getCellsForSelection = useCallback(
     (selection: Rectangle) => {
       const out: GridCell[][] = [];
@@ -99,7 +128,6 @@ export function DataGrid({
     [getCellContent],
   );
 
-  // Batch edits from paste and fill-down (FR-023, FR-024) as one undoable unit.
   const onCellsEdited = useCallback(
     (newValues: readonly EditListItem[]) => {
       if (!onEditCells) return false;
@@ -129,20 +157,34 @@ export function DataGrid({
     [columns, cellIssue, onHover],
   );
 
+  // Size the grid to its content, capped at the container — so short tables leave a
+  // grey gap below instead of empty rows, and tall tables scroll inside the grid.
+  const contentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT + 2;
+  const gridHeight = Math.max(HEADER_HEIGHT + ROW_HEIGHT, Math.min(contentHeight, size.height));
+
   return (
-    <DataEditor
-      columns={gridColumns}
-      rows={rows.length}
-      getCellContent={getCellContent}
-      onCellEdited={onCellEdited}
-      onCellsEdited={onCellsEdited}
-      getCellsForSelection={getCellsForSelection}
-      onItemHovered={onItemHovered}
-      fillHandle
-      rowMarkers="number"
-      freezeColumns={Math.min(freezeColumns, columns.length)}
-      width="100%"
-      height="100%"
-    />
+    <div ref={wrapperRef} style={{ width: "100%", height: "100%", background: "#f3f4f6" }}>
+      {size.width > 0 && (
+        <DataEditor
+          columns={gridColumns}
+          rows={rows.length}
+          rowHeight={ROW_HEIGHT}
+          headerHeight={HEADER_HEIGHT}
+          getCellContent={getCellContent}
+          onCellEdited={onCellEdited}
+          onCellsEdited={onCellsEdited}
+          onColumnResize={onColumnResize}
+          getCellsForSelection={getCellsForSelection}
+          onItemHovered={onItemHovered}
+          fillHandle
+          smoothScrollX
+          smoothScrollY
+          rowMarkers="number"
+          freezeColumns={Math.min(freezeColumns, columns.length)}
+          width={size.width}
+          height={gridHeight}
+        />
+      )}
+    </div>
   );
 }
