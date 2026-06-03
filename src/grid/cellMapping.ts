@@ -5,8 +5,8 @@ import { GridCellKind, type EditableGridCell, type GridCell } from "@glideapps/g
 import { enumLabel, type GridColumnDef } from "../schema/toColumns.ts";
 import type { CellValue } from "../schema/types.ts";
 
-/** Stored value → Glide cell. */
-export function toGridCell(def: GridColumnDef, value: CellValue): GridCell {
+/** Stored value → Glide cell. `decimals` decimal-aligns a numeric column. */
+export function toGridCell(def: GridColumnDef, value: CellValue, decimals?: number): GridCell {
   if (def.kind === "enum") {
     const v = typeof value === "string" ? value : "";
     return {
@@ -29,10 +29,14 @@ export function toGridCell(def: GridColumnDef, value: CellValue): GridCell {
   }
   if (def.kind === "number") {
     const num = value == null ? undefined : Number(value);
+    // Decimal-align: render every value with the column's max decimal places; the
+    // right-aligned number cell then lines up the decimal points.
+    const display = value == null ? "" : decimals != null ? Number(value).toFixed(decimals) : String(value);
     return {
       kind: GridCellKind.Number,
       data: num,
-      displayData: value == null ? "" : String(value),
+      displayData: display,
+      contentAlign: "right",
       allowOverlay: true,
     };
   }
@@ -40,6 +44,8 @@ export function toGridCell(def: GridColumnDef, value: CellValue): GridCell {
     kind: GridCellKind.Text,
     data: editableText(value),
     displayData: displayText(def, value),
+    // Integers are numeric → right-align them too; identifiers/text stay left.
+    contentAlign: def.bigintStorage ? "right" : undefined,
     allowOverlay: true,
   };
 }

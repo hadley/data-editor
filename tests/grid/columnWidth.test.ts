@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "../../src/schema/parse.ts";
 import { toColumns } from "../../src/schema/toColumns.ts";
-import { MAX_WIDTH, MIN_WIDTH, displayString, measureColumnWidth } from "../../src/grid/columnWidth.ts";
+import {
+  MAX_WIDTH,
+  MIN_WIDTH,
+  columnDecimals,
+  displayString,
+  measureColumnWidth,
+} from "../../src/grid/columnWidth.ts";
 import type { Row } from "../../src/schema/types.ts";
 
 const cols = toColumns(
@@ -40,5 +46,24 @@ describe("measureColumnWidth", () => {
   it("displayString shows enum labels and ISO dates", () => {
     expect(displayString(col("e"), "A")).toBe("A Very Long Active Label");
     expect(displayString(col("short"), null)).toBe("");
+  });
+});
+
+describe("columnDecimals", () => {
+  const [qty] = toColumns(parse("columns:\n  - {name: q, type: number, subtype: quantity}").columns);
+  const [str] = toColumns(parse("columns:\n  - {name: s, type: string}").columns);
+
+  it("returns the max fractional digits across values", () => {
+    expect(columnDecimals(qty, [{ q: 12 }, { q: 8.5 }, { q: 6 }])).toBe(1);
+    expect(columnDecimals(qty, [{ q: 1.25 }, { q: 8.5 }, { q: 6 }])).toBe(2);
+    expect(columnDecimals(qty, [{ q: 1 }, { q: 2 }, { q: 3 }])).toBe(0);
+  });
+
+  it("caps very long fractions", () => {
+    expect(columnDecimals(qty, [{ q: 0.1 + 0.2 }])).toBeLessThanOrEqual(6);
+  });
+
+  it("returns 0 for non-numeric columns", () => {
+    expect(columnDecimals(str, [{ s: "x" }])).toBe(0);
   });
 });

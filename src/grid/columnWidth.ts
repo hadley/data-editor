@@ -39,3 +39,34 @@ export function measureColumns(defs: GridColumnDef[], rows: Row[]): Record<strin
   for (const def of defs) out[def.name] = measureColumnWidth(def, rows);
   return out;
 }
+
+const MAX_DECIMALS = 6;
+
+/**
+ * Decimal places to display for a numeric (quantity) column = the max fractional
+ * digits seen across sampled values (capped). Used to decimal-align the column.
+ */
+export function columnDecimals(def: GridColumnDef, rows: Row[], sample = 500): number {
+  if (def.kind !== "number") return 0;
+  let max = 0;
+  const n = Math.min(rows.length, sample);
+  for (let i = 0; i < n; i++) {
+    const v = rows[i]?.[def.name];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      const s = Math.abs(v).toString();
+      const dot = s.indexOf(".");
+      if (dot >= 0) {
+        max = Math.max(max, Math.min(s.length - dot - 1, MAX_DECIMALS));
+        if (max === MAX_DECIMALS) break;
+      }
+    }
+  }
+  return max;
+}
+
+/** Decimal places for every numeric column, keyed by name. */
+export function columnDecimalsMap(defs: GridColumnDef[], rows: Row[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const def of defs) if (def.kind === "number") out[def.name] = columnDecimals(def, rows);
+  return out;
+}

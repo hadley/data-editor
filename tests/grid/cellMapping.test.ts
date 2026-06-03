@@ -50,6 +50,21 @@ describe("toGridCell", () => {
     const cell = toGridCell(def("qty"), null);
     if (cell.kind === GridCellKind.Number) expect(cell.data).toBeUndefined();
   });
+
+  it("decimal-aligns numeric columns to a fixed number of places, right-aligned", () => {
+    const a = toGridCell(def("qty"), 12, 2);
+    const b = toGridCell(def("qty"), 8.5, 2);
+    if (a.kind === GridCellKind.Number) {
+      expect(a.displayData).toBe("12.00");
+      expect(a.contentAlign).toBe("right");
+    }
+    if (b.kind === GridCellKind.Number) expect(b.displayData).toBe("8.50");
+  });
+
+  it("right-aligns integer (ordinal) text cells", () => {
+    const cell = toGridCell(def("ord"), 42n);
+    if (cell.kind === GridCellKind.Text) expect(cell.contentAlign).toBe("right");
+  });
 });
 
 describe("fromGridCell", () => {

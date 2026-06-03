@@ -200,6 +200,7 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-045**: Users MUST be able to insert a row above or below any row, and delete a row, via a row context menu (right-click); these MUST be undoable. Keyboard navigation MUST NOT move into a non-existent row beyond the data.
 - **FR-046**: Inserting or deleting a row MUST keep validation correct by re-evaluating after the row indices shift.
 - **FR-047**: Closing a dataset with unsaved changes or outstanding validation problems MUST prompt for confirmation before discarding.
+- **FR-048**: Numeric columns MUST be right-aligned and decimal-aligned — values in a numeric (quantity) column are shown with a consistent number of decimal places so the decimal points line up; integers are right-aligned.
 
 ### Key Entities *(include if feature involves data)*
 

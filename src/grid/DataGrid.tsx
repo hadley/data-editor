@@ -31,7 +31,7 @@ import "@glideapps/glide-data-grid/dist/index.css";
 import { type GridColumnDef } from "../schema/toColumns.ts";
 import type { CellValue, Row, Violation } from "../schema/types.ts";
 import { fromGridCell, toGridCell } from "./cellMapping.ts";
-import { measureColumns } from "./columnWidth.ts";
+import { columnDecimalsMap, measureColumns } from "./columnWidth.ts";
 
 export interface GridEdit {
   row: number;
@@ -190,12 +190,15 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     if (column.id) setWidths((w) => ({ ...w, [column.id as string]: newSize }));
   }, []);
 
+  // Decimal places per numeric column, so values decimal-align (recomputed as data changes).
+  const decimalsByCol = useMemo(() => columnDecimalsMap(columns, rows), [columns, rows]);
+
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
       const [colIdx, rowIdx] = cell;
       const def = columns[colIdx];
       const value = rows[rowIdx]?.[def.name] ?? null;
-      const base = toGridCell(def, value);
+      const base = toGridCell(def, value, decimalsByCol[def.name]);
       if (cellIssue?.(rowIdx, def.name)) {
         return { ...base, themeOverride: { bgCell: INVALID_CELL_BG } } as GridCell;
       }
@@ -206,7 +209,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
       }
       return base;
     },
-    [columns, rows, cellIssue, rowHasIssue],
+    [columns, rows, cellIssue, rowHasIssue, decimalsByCol],
   );
 
   const onCellEdited = useCallback(
