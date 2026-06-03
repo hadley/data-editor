@@ -195,7 +195,11 @@ On a small phone-sized screen where a grid is unusable, the user instead sees on
 - **FR-040**: Keyboard cell navigation MUST zigzag row to row: Tab off the far-right cell moves to the first cell of the next row (appending a row past the last row, FR-033), and Shift+Tab off the far-left cell moves to the last cell of the previous row.
 - **FR-041**: After rows are removed (e.g., undoing an added row), the selection MUST move to a still-existing row rather than pointing at a row that no longer exists.
 - **FR-042**: When a cell editor (such as an enum dropdown) is open, Tab MUST first commit the editor before moving the selection.
-- **FR-043**: A column's type indicator MUST appear after the column name in the header, and hovering the header MUST reveal fuller type details (constraints, range, allowed values).
+- **FR-043**: Each column header MUST show the column name with its dictionary type beneath it (a second line in smaller text), and hovering the header MUST reveal fuller type details (constraints, range, allowed values).
+- **FR-044**: The grid MUST apply subtle zebra striping to alternating rows for readability, without obscuring invalid-cell or invalid-row indicators.
+- **FR-045**: Users MUST be able to insert a row above or below any row, and delete a row, via a row context menu (right-click); these MUST be undoable. Keyboard navigation MUST NOT move into a non-existent row beyond the data.
+- **FR-046**: Inserting or deleting a row MUST keep validation correct by re-evaluating after the row indices shift.
+- **FR-047**: Closing a dataset with unsaved changes or outstanding validation problems MUST prompt for confirmation before discarding.
 
 ### Key Entities *(include if feature involves data)*
 

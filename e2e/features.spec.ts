@@ -1,8 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fileURLToPath } from "node:url";
-
-const DICT = fileURLToPath(new URL("../examples/foodbank.yaml", import.meta.url));
-const PARQUET = fileURLToPath(new URL("../examples/foodbank.parquet", import.meta.url));
+import { DICT, PARQUET } from "./fixtures.ts";
 
 async function open(page: import("@playwright/test").Page) {
   await page.goto("/");
@@ -18,7 +15,7 @@ test("add row, then undo with keyboard, restores the count (full undo stack)", a
   await open(page);
   expect(await rowCount(page)).toBe(4);
 
-  await page.getByRole("button", { name: "+ Row" }).click();
+  await page.getByRole("button", { name: /Row/ }).click();
   expect(await rowCount(page)).toBe(5);
 
   await page.keyboard.press("Meta+z");
@@ -85,6 +82,25 @@ test("selection clamps to an existing row after undoing an added row", async ({ 
   await expect.poll(() => rowCount(page)).toBe(4);
   // Selection must move back onto an existing row (not row index 4).
   await expect.poll(async () => (await selCell(page))?.[1]).toBeLessThanOrEqual(3);
+});
+
+test("right-click offers insert and delete row", async ({ page }) => {
+  await open(page);
+  expect(await rowCount(page)).toBe(4);
+  const canvas = page.getByTestId("data-grid-canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + 100, box.y + 53); // hover row 0
+  await page.mouse.click(box.x + 100, box.y + 53, { button: "right" });
+  await expect(page.getByTestId("row-menu")).toBeVisible();
+
+  await page.getByRole("button", { name: "Insert row below" }).click();
+  await expect.poll(() => rowCount(page)).toBe(5);
+
+  // Delete via the menu.
+  await page.mouse.move(box.x + 100, box.y + 53);
+  await page.mouse.click(box.x + 100, box.y + 53, { button: "right" });
+  await page.getByRole("button", { name: /Delete row/ }).click();
+  await expect.poll(() => rowCount(page)).toBe(4);
 });
 
 test("status bar shows the exact validation error for the selected cell", async ({ page }) => {

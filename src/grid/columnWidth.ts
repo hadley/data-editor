@@ -18,22 +18,24 @@ export function displayString(def: GridColumnDef, value: CellValue): string {
   return String(value);
 }
 
-/** Width that fits the header (name + type icon) and the widest sampled value. */
-export function measureColumnWidth(def: GridColumnDef, rows: Row[], sample = 200, iconPx = 0): number {
+/** Width that fits the header (name on line 1, type on line 2) and the widest value. */
+export function measureColumnWidth(def: GridColumnDef, rows: Row[], sample = 200): number {
   let valueLongest = 0;
   const n = Math.min(rows.length, sample);
   for (let i = 0; i < n; i++) {
     const len = displayString(def, rows[i]?.[def.name] ?? null).length;
     if (len > valueLongest) valueLongest = len;
   }
-  const headerPx = def.title.length * CHAR_PX + iconPx + PADDING;
+  // Type label is rendered ~0.85x; weight its chars a little lighter.
+  const headerChars = Math.max(def.title.length, def.typeLabel.length * 0.85);
+  const headerPx = headerChars * CHAR_PX + PADDING;
   const valuePx = valueLongest * CHAR_PX + PADDING;
   return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.max(headerPx, valuePx)));
 }
 
 /** Initial widths for every column, keyed by column name. */
-export function measureColumns(defs: GridColumnDef[], rows: Row[], iconPx = 0): Record<string, number> {
+export function measureColumns(defs: GridColumnDef[], rows: Row[]): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const def of defs) out[def.name] = measureColumnWidth(def, rows, 200, iconPx);
+  for (const def of defs) out[def.name] = measureColumnWidth(def, rows);
   return out;
 }

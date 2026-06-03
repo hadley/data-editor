@@ -9,3 +9,36 @@ body,
 * {
   box-sizing: border-box;
 }
+
+/* Toolbar buttons — flat, with hover/active/disabled states. */
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2328;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tb-btn:hover:not(:disabled) {
+  background: #ececef;
+}
+.tb-btn:active:not(:disabled) {
+  background: #e0e0e4;
+}
+.tb-btn:disabled {
+  color: #b8b8bd;
+  cursor: default;
+}
+.tb-btn--primary {
+  background: #4f46e5;
+  color: #fff;
+}
+.tb-btn--primary:hover:not(:disabled) {
+  background: #4338ca;
+}

@@ -111,21 +111,55 @@ export class Workbook {
   }
 
   addRow(): void {
-    const index = this.rows.length;
+    this.insertRow(this.rows.length);
+  }
+
+  /** Insert a blank row at `index` (0..length). Undoable. */
+  insertRow(index: number): void {
+    const at = Math.max(0, Math.min(index, this.rows.length));
     this.history.push({
-      kind: "addRow",
+      kind: "insertRow",
       apply: () => {
-        const blank: Row = {};
-        for (const c of this.dict.columns) blank[c.name] = null;
-        this.rows = [...this.rows, blank];
-        for (const c of this.dict.columns) this.revalidateCell(index, c.name, null);
+        this.rows = [...this.rows.slice(0, at), this.blankRow(), ...this.rows.slice(at)];
+        this.rebuildValidation(); // row indices shifted
       },
       invert: () => {
-        this.rows = this.rows.slice(0, index);
-        for (const c of this.dict.columns) this.cellViolations.delete(cellKey(index, c.name));
+        this.rows = [...this.rows.slice(0, at), ...this.rows.slice(at + 1)];
+        this.rebuildValidation();
       },
     });
     this.notify(true);
+  }
+
+  /** Delete the row at `index`. Undoable. */
+  deleteRow(index: number): void {
+    if (index < 0 || index >= this.rows.length) return;
+    const removed = this.rows[index];
+    this.history.push({
+      kind: "deleteRow",
+      apply: () => {
+        this.rows = [...this.rows.slice(0, index), ...this.rows.slice(index + 1)];
+        this.rebuildValidation();
+      },
+      invert: () => {
+        this.rows = [...this.rows.slice(0, index), removed, ...this.rows.slice(index)];
+        this.rebuildValidation();
+      },
+    });
+    this.notify(true);
+  }
+
+  private blankRow(): Row {
+    const blank: Row = {};
+    for (const c of this.dict.columns) blank[c.name] = null;
+    return blank;
+  }
+
+  /** Recompute all validations from scratch — used after structural row changes. */
+  private rebuildValidation(): void {
+    this.cellViolations = computeCellViolations(this.dict, this.rows, this.validators);
+    this.tableViolations = this.validators.validateTable(this.rows);
+    this.tableIndex = indexTableViolations(this.tableViolations);
   }
 
   undo(): void {

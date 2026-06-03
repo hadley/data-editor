@@ -2,7 +2,7 @@
 // Every data mutation flows through a reversible Command so single-cell and bulk
 // operations (paste, fill-down) undo uniformly.
 
-export type CommandKind = "setCell" | "addRow" | "paste" | "fillDown";
+export type CommandKind = "setCell" | "addRow" | "insertRow" | "deleteRow" | "paste" | "fillDown";
 
 export interface Command {
   kind: CommandKind;

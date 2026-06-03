@@ -26,6 +26,7 @@ export function App() {
   const [hoverMsg, setHoverMsg] = useState<string | null>(null);
   const [headerDetail, setHeaderDetail] = useState<string | null>(null);
   const [activeCell, setActiveCell] = useState<{ row: number; col: string } | null>(null);
+  const [menu, setMenu] = useState<{ row: number; x: number; y: number } | null>(null);
   const [cardIndex, setCardIndex] = useState(0);
   const [autosaveOn, setAutosaveOn] = useState(true);
   const [isNarrow, setIsNarrow] = useState(
@@ -139,6 +140,41 @@ export function App() {
     afterMutate();
   }, [workbook, afterMutate]);
 
+  const insertAt = useCallback(
+    (at: number) => {
+      workbook?.insertRow(at);
+      afterMutate();
+      setMenu(null);
+    },
+    [workbook, afterMutate],
+  );
+
+  const deleteAt = useCallback(
+    (row: number) => {
+      workbook?.deleteRow(row);
+      afterMutate();
+      setMenu(null);
+    },
+    [workbook, afterMutate],
+  );
+
+  const handleClose = useCallback(() => {
+    if (workbook && (workbook.dirty || workbook.violationCount() > 0)) {
+      const msg =
+        workbook.violationCount() > 0
+          ? `This dataset has ${workbook.violationCount()} validation problem${
+              workbook.violationCount() === 1 ? "" : "s"
+            } and may not be fully saved. Close and discard changes?`
+          : "Discard unsaved changes and close?";
+      if (!window.confirm(msg)) return;
+    }
+    setWorkbook(null);
+    setOrigin(null);
+    setReconcileError(null);
+    setActiveCell(null);
+    setMenu(null);
+  }, [workbook]);
+
   const jumpToFirstProblem = useCallback(() => {
     const cell = workbook?.firstViolationCell();
     if (!cell) return;
@@ -212,11 +248,7 @@ export function App() {
         onRedo={handleRedo}
         onSave={handleSave}
         onJumpToProblem={jumpToFirstProblem}
-        onClose={() => {
-          setWorkbook(null);
-          setOrigin(null);
-          setReconcileError(null);
-        }}
+        onClose={handleClose}
       />
 
       {workbook && (
@@ -249,6 +281,7 @@ export function App() {
               onHover={setHoverMsg}
               onHeaderHover={setHeaderDetail}
               onSelectCell={setActiveCell}
+              onRowContextMenu={(row, x, y) => setMenu({ row, x, y })}
             />
           )
         ) : reconcileError ? (
@@ -262,6 +295,24 @@ export function App() {
         <footer style={{ ...statusBar, color: statusIsError ? "#c00" : "#555" }} data-testid="status-bar">
           {statusText || <span style={{ color: "#aaa" }}>Ready</span>}
         </footer>
+      )}
+
+      {menu && workbook && (
+        <>
+          <div style={menuOverlay} onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
+          <div style={{ ...menuBox, left: menu.x, top: menu.y }} role="menu" data-testid="row-menu">
+            <button style={menuItem} onClick={() => insertAt(menu.row)}>
+              Insert row above
+            </button>
+            <button style={menuItem} onClick={() => insertAt(menu.row + 1)}>
+              Insert row below
+            </button>
+            <div style={{ height: 1, background: "#eee", margin: "4px 0" }} />
+            <button style={{ ...menuItem, color: "#c00" }} onClick={() => deleteAt(menu.row)}>
+              Delete row {menu.row + 1}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -284,40 +335,52 @@ function Toolbar(props: {
   onJumpToProblem: () => void;
   onClose: () => void;
 }) {
+  if (!props.hasWorkbook) {
+    return (
+      <header style={toolbar}>
+        {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
+      </header>
+    );
+  }
   return (
     <header style={toolbar}>
-      <strong style={{ marginRight: 8 }}>Data Entry Tool</strong>
-      {props.hasWorkbook && (
-        <>
-          <button onClick={props.onAddRow}>+ Row</button>
-          <span style={sep} />
-          <button onClick={props.onUndo} disabled={!props.canUndo} title="Undo (⌘Z)">
-            ↶ Undo
-          </button>
-          <button onClick={props.onRedo} disabled={!props.canRedo} title="Redo (⇧⌘Z)">
-            ↷ Redo
-          </button>
-          <span style={sep} />
-          <button onClick={props.onSave} style={props.dirty ? primaryBtn : undefined}>
-            Save{props.dirty ? " ●" : ""}
-          </button>
-          <label
-            style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: props.canAutosave ? "#333" : "#aaa" }}
-            title={props.canAutosave ? "Autosave to the original file" : "Autosave needs in-place save (desktop)"}
-          >
-            <input type="checkbox" checked={props.autosaveOn} disabled={!props.canAutosave} onChange={props.onToggleAutosave} />
-            Autosave
-          </label>
-          <button onClick={props.onClose}>Close</button>
-          <span style={{ flex: 1 }} />
-          {props.violationCount > 0 && (
-            <button style={badgeBtn} onClick={props.onJumpToProblem} title="Jump to the first problem">
-              {props.violationCount} problem{props.violationCount === 1 ? "" : "s"} →
-            </button>
-          )}
-        </>
+      <button className="tb-btn" onClick={props.onAddRow} title="Append a row">
+        ＋ Row
+      </button>
+      <span style={sep} />
+      <button className="tb-btn" onClick={props.onUndo} disabled={!props.canUndo} title="Undo (⌘Z)">
+        ↶
+      </button>
+      <button className="tb-btn" onClick={props.onRedo} disabled={!props.canRedo} title="Redo (⇧⌘Z)">
+        ↷
+      </button>
+      <span style={sep} />
+      <button
+        className={props.dirty ? "tb-btn tb-btn--primary" : "tb-btn"}
+        onClick={props.onSave}
+        title="Save"
+      >
+        Save{props.dirty ? " ●" : ""}
+      </button>
+      <label
+        className="tb-btn"
+        style={{ cursor: props.canAutosave ? "pointer" : "default" }}
+        title={props.canAutosave ? "Autosave to the original file" : "Autosave needs in-place save (desktop)"}
+      >
+        <input type="checkbox" checked={props.autosaveOn} disabled={!props.canAutosave} onChange={props.onToggleAutosave} />
+        Autosave
+      </label>
+      <span style={{ flex: 1 }} />
+      {props.violationCount > 0 && (
+        <button style={badgeBtn} onClick={props.onJumpToProblem} title="Jump to the first problem">
+          {props.violationCount} problem{props.violationCount === 1 ? "" : "s"} →
+        </button>
       )}
       {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
+      <span style={sep} />
+      <button className="tb-btn" onClick={props.onClose} title="Close this dataset">
+        ✕ Close
+      </button>
     </header>
   );
 }
@@ -369,6 +432,29 @@ const statusBar: React.CSSProperties = {
   textOverflow: "ellipsis",
 };
 const sep: React.CSSProperties = { width: 1, height: 20, background: "#ddd", margin: "0 4px" };
+const menuOverlay: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 1000 };
+const menuBox: React.CSSProperties = {
+  position: "fixed",
+  zIndex: 1001,
+  background: "white",
+  border: "1px solid #ccc",
+  borderRadius: 6,
+  boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+  padding: 4,
+  minWidth: 160,
+  fontSize: 13,
+};
+const menuItem: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  background: "none",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: 4,
+  cursor: "pointer",
+  fontSize: 13,
+};
 const badgeBtn: React.CSSProperties = {
   background: "#fee2e2",
   color: "#c00",
@@ -378,4 +464,3 @@ const badgeBtn: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
-const primaryBtn: React.CSSProperties = { background: "#4f46e5", color: "white", border: "1px solid #4f46e5" };

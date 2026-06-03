@@ -1,8 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fileURLToPath } from "node:url";
-
-const DICT = fileURLToPath(new URL("../examples/foodbank.yaml", import.meta.url));
-const PARQUET = fileURLToPath(new URL("../examples/foodbank.parquet", import.meta.url));
+import { DICT, PARQUET } from "./fixtures.ts";
 
 test("invalid row paints the row-number marker red", async ({ page }) => {
   await page.goto("/");

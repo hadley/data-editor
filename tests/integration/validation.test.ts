@@ -84,4 +84,29 @@ describe("US3 live validation", () => {
     expect(wb.rowHasIssue(0)).toBe(false);
     expect(wb.firstViolationCell()).toBeNull();
   });
+
+  it("inserts a row in the middle and re-indexes violations correctly", () => {
+    const wb = new Workbook(dict, clean()); // rows: [id 1, id 2]
+    wb.setCell(1, "status", "Z"); // row 1 invalid
+    expect(wb.rowHasIssue(1)).toBe(true);
+    wb.insertRow(1); // blank row now at index 1; old row 1 shifts to index 2
+    expect(wb.rows.length).toBe(3);
+    expect(wb.rowHasIssue(2)).toBe(true); // the invalid row followed the shift
+    expect(wb.rowHasIssue(1)).toBe(true); // the new blank row is invalid (required note/id)
+    wb.undo();
+    expect(wb.rows.length).toBe(2);
+    expect(wb.rowHasIssue(1)).toBe(true); // back to original indexing
+  });
+
+  it("deletes a row and clears its violations; undo restores it", () => {
+    const wb = new Workbook(dict, clean());
+    wb.setCell(0, "note", null); // row 0 invalid
+    expect(wb.violationCount()).toBe(1);
+    wb.deleteRow(0);
+    expect(wb.rows.length).toBe(1);
+    expect(wb.violationCount()).toBe(0); // the invalid row is gone
+    wb.undo();
+    expect(wb.rows.length).toBe(2);
+    expect(wb.rowHasIssue(0)).toBe(true); // restored with its violation
+  });
 });

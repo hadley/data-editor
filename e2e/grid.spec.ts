@@ -1,8 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fileURLToPath } from "node:url";
-
-const DICT = fileURLToPath(new URL("../examples/foodbank.yaml", import.meta.url));
-const PARQUET = fileURLToPath(new URL("../examples/foodbank.parquet", import.meta.url));
+import { DICT, PARQUET } from "./fixtures.ts";
 
 async function openFixture(page: import("@playwright/test").Page) {
   await page.goto("/");

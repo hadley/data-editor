@@ -28,7 +28,7 @@ import {
 } from "@glideapps/glide-data-grid";
 import { allCells } from "@glideapps/glide-data-grid-cells";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { type CellKind, type GridColumnDef } from "../schema/toColumns.ts";
+import { type GridColumnDef } from "../schema/toColumns.ts";
 import type { CellValue, Row, Violation } from "../schema/types.ts";
 import { fromGridCell, toGridCell } from "./cellMapping.ts";
 import { measureColumns } from "./columnWidth.ts";
@@ -55,32 +55,17 @@ interface Props {
   onHover?: (message: string | null) => void;
   onHeaderHover?: (detail: string | null) => void;
   onSelectCell?: (cell: { row: number; col: string } | null) => void;
+  /** Right-click on a row → show an insert/delete menu at screen (x, y). */
+  onRowContextMenu?: (row: number, x: number, y: number) => void;
   freezeColumns?: number;
 }
 
 const INVALID_CELL_BG = "#ffd5d5";
 const INVALID_ROW_BG = "#fca5a5"; // reddens the row-number marker (row theme bgCell)
+const ZEBRA_BG = "#f7f7f8"; // subtle striping on alternating rows
 const NEUTRAL_BG = "#ffffff";
-const HEADER_HEIGHT = 36;
+const HEADER_HEIGHT = 48; // two lines: name + type
 const ROW_HEIGHT = 34;
-const ICON_PX = 30;
-
-function glyphFor(kind: CellKind, typeLabel: string): string {
-  switch (kind) {
-    case "number":
-      return "#";
-    case "boolean":
-      return "☑";
-    case "date":
-      return "📅";
-    case "datetime":
-      return "🕒";
-    case "enum":
-      return "▾";
-    default:
-      return typeLabel === "id" ? "🔑" : typeLabel === "integer" ? "#" : "T";
-  }
-}
 
 export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   {
@@ -94,6 +79,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     onHover,
     onHeaderHover,
     onSelectCell,
+    onRowContextMenu,
     freezeColumns = 1,
   },
   ref,
@@ -108,8 +94,10 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   // Mirror selection in a ref: React state lags during rapid key presses, but the
   // keyboard handler needs the *current* cell synchronously.
   const selectionRef = useRef(gridSelection);
+  const lastCellRef = useRef<readonly [number, number] | null>(null);
   const setGridSelection = useCallback((s: GridSelection) => {
     selectionRef.current = s;
+    if (s.current?.cell) lastCellRef.current = s.current.cell;
     setGridSelectionState(s);
   }, []);
 
@@ -130,7 +118,7 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
   useEffect(() => {
-    setWidths(measureColumns(columnsRef.current, rowsRef.current, ICON_PX));
+    setWidths(measureColumns(columnsRef.current, rowsRef.current));
   }, [colKey]);
 
   // Test hook: expose the currently selected cell.
@@ -163,12 +151,12 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     [columns, widths],
   );
 
-  const glyphById = useMemo(
-    () => new Map(columns.map((c) => [c.name, glyphFor(c.kind, c.typeLabel)])),
+  const typeLabelById = useMemo(
+    () => new Map(columns.map((c) => [c.name, c.typeLabel])),
     [columns],
   );
 
-  // Draw the header as "name  <type glyph>" — type icon AFTER the name (FR-030).
+  // Two-line header: column name on top, dictionary type in smaller grey below (FR-030/FR-043).
   const drawHeader = useCallback(
     (args: {
       ctx: CanvasRenderingContext2D;
@@ -178,27 +166,24 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     }) => {
       const { ctx, column, rect, theme } = args;
       const padX = 8;
-      const midY = rect.y + rect.height / 2;
       const headerFont =
         (theme as unknown as { headerFontFull?: string }).headerFontFull ??
         `${theme.headerFontStyle} ${theme.fontFamily}`;
       ctx.save();
-      ctx.textBaseline = "middle";
+      ctx.textBaseline = "alphabetic";
       ctx.fillStyle = theme.textHeader;
       ctx.font = headerFont;
-      const title = column.title;
-      ctx.fillText(title, rect.x + padX, midY);
-      const titleW = ctx.measureText(title).width;
-      const glyph = column.id ? glyphById.get(column.id) : undefined;
-      if (glyph) {
+      ctx.fillText(column.title, rect.x + padX, rect.y + rect.height / 2 - 1);
+      const typeLabel = column.id ? typeLabelById.get(column.id) : undefined;
+      if (typeLabel) {
         ctx.fillStyle = theme.textLight;
-        ctx.font = `13px ${theme.fontFamily}`;
-        ctx.fillText(glyph, rect.x + padX + titleW + 6, midY);
+        ctx.font = `11px ${theme.fontFamily}`;
+        ctx.fillText(typeLabel, rect.x + padX, rect.y + rect.height / 2 + 14);
       }
       ctx.restore();
       return true;
     },
-    [glyphById],
+    [typeLabelById],
   );
 
   const onColumnResize = useCallback((column: GridColumn, newSize: number) => {
@@ -260,8 +245,11 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
     [columns, onEditCells],
   );
 
+  const hoveredCell = useRef<readonly [number, number] | null>(null);
+
   const onItemHovered = useCallback(
     (args: GridMouseEventArgs) => {
+      hoveredCell.current = args.kind === "cell" ? args.location : null;
       if (args.kind === "header") {
         const def = columns[args.location[0]];
         onHeaderHover?.(def?.detail ?? null);
@@ -339,33 +327,43 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
   );
 
   // Keep the selection on an existing row after rows shrink (e.g. undo of add-row).
+  // Glide may itself clear an out-of-range selection, so fall back to the last cell.
   useEffect(() => {
-    const cur = selectionRef.current.current?.cell;
-    if (!cur) return;
-    if (rows.length === 0) {
-      const empty = { columns: CompactSelection.empty(), rows: CompactSelection.empty() };
-      selectionRef.current = empty;
-      setGridSelectionState(empty);
-      onSelectCell?.(null);
-    } else if (cur[1] >= rows.length) {
+    if (rows.length === 0) return;
+    const cur = selectionRef.current.current?.cell ?? lastCellRef.current;
+    if (cur && cur[1] >= rows.length) {
       selectCell(Math.min(cur[0], Math.max(columns.length - 1, 0)), rows.length - 1);
     }
-  }, [rows.length, columns.length, selectCell, onSelectCell]);
+  }, [rows.length, columns.length, selectCell]);
 
   const getRowThemeOverride = useCallback(
-    (row: number): Partial<Theme> | undefined =>
-      rowHasIssue?.(row) ? { bgCell: INVALID_ROW_BG } : undefined,
+    (row: number): Partial<Theme> | undefined => {
+      if (rowHasIssue?.(row)) return { bgCell: INVALID_ROW_BG }; // reddens the marker
+      if (row % 2 === 1) return { bgCell: ZEBRA_BG }; // subtle zebra striping
+      return undefined;
+    },
     [rowHasIssue],
   );
 
-  const contentHeight = HEADER_HEIGHT + (rows.length + 1) * ROW_HEIGHT + 2; // +1 for trailing add-row
+  const contentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT + 2;
   const gridHeight = Math.max(HEADER_HEIGHT + ROW_HEIGHT, Math.min(contentHeight, size.height));
+
+  const onContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const cell = hoveredCell.current;
+      if (!onRowContextMenu || !cell) return;
+      e.preventDefault();
+      onRowContextMenu(cell[1], e.clientX, e.clientY);
+    },
+    [onRowContextMenu],
+  );
 
   return (
     <div
       ref={wrapperRef}
       style={{ width: "100%", height: "100%", background: "#f3f4f6" }}
       onKeyDownCapture={onWrapperKeyDownCapture}
+      onContextMenu={onContextMenu}
     >
       {size.width > 0 && (
         <DataEditor
@@ -390,8 +388,6 @@ export const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid(
             const def = cell ? columnsRef.current[cell[0]] : undefined;
             onSelectCell?.(def && cell ? { row: cell[1], col: def.name } : null);
           }}
-          onRowAppended={onAppendRow ? () => void onAppendRow() : undefined}
-          trailingRowOptions={onAppendRow ? { sticky: false, tint: true } : undefined}
           rowMarkers="number"
           fillHandle
           smoothScrollX
