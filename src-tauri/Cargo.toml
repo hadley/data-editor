@@ -1,12 +1,12 @@
 [package]
-name = "data-editor"
+name = "herringbone"
 version = "0.1.0"
-description = "Spreadsheet-style data entry tool for Parquet data"
+description = "Herringbone — spreadsheet-style editor for Parquet data"
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "data_editor_lib"
+name = "herringbone_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

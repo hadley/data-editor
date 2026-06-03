@@ -1,6 +1,6 @@
-# Data Entry Tool (v1)
+# Herringbone
 
-A spreadsheet-style editor for a single table of tabular data. You open a **Parquet**
+A spreadsheet-style editor for tabular data, driven by a `data-dict.yaml` dictionary. You open a **Parquet**
 file together with its **`data-dict.yaml`** dictionary; the dictionary is the single
 source of truth that drives the grid columns, per-cell validation, and the on-disk
 Parquet schema, so the three can never drift apart.

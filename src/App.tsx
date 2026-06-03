@@ -357,15 +357,19 @@ function Toolbar(props: {
   onJumpToProblem: () => void;
   onClose: () => void;
 }) {
+  const brand = <img src="/logo.png" alt="Herringbone" width={22} height={22} style={{ borderRadius: 5, flexShrink: 0 }} />;
   if (!props.hasWorkspace) {
     return (
       <header style={toolbar}>
-        {props.error && <span style={{ color: "#c00", fontSize: 13 }}>⚠ {props.error}</span>}
+        {brand}
+        {props.error && <span style={{ color: "#c00", fontSize: 13, marginLeft: 8 }}>⚠ {props.error}</span>}
       </header>
     );
   }
   return (
     <header style={toolbar}>
+      {brand}
+      <span style={sep} />
       <button className="tb-btn" onClick={props.onAddRow} disabled={!props.hasWorkbook} title="Append a row">
         ＋ Row
       </button>

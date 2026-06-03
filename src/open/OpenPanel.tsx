@@ -85,7 +85,13 @@ export function OpenPanel({ onLoaded, onError }: Props) {
 
   return (
     <div style={{ padding: 32, maxWidth: 480, margin: "0 auto", fontFamily: "system-ui" }}>
-      <h2 style={{ marginTop: 0 }}>Open a dataset</h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        <img src="/logo.png" alt="Herringbone" width={44} height={44} style={{ borderRadius: 8 }} />
+        <div>
+          <h2 style={{ margin: 0 }}>Herringbone</h2>
+          <div style={{ color: "#888", fontSize: 13 }}>Open a dataset</div>
+        </div>
+      </div>
 
       {tauri ? (
         <>

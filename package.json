@@ -1,9 +1,9 @@
 {
-  "name": "data-editor",
+  "name": "herringbone",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Spreadsheet-style data entry tool for Parquet data driven by a data-dict.yaml dictionary",
+  "description": "Herringbone — spreadsheet-style editor for Parquet data driven by a data-dict.yaml dictionary",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
