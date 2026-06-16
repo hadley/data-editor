@@ -1,5 +1,11 @@
 # Herringbone
 
+> ⚠️ **EXPERIMENTAL HACKATHON PROJECT** ⚠️
+>
+> This is a **super experimental** project built during a hackathon. It is **not production-ready**,
+> may eat your data, break without warning, or change drastically at any time. Do **not** rely on it
+> for anything important, and always keep backups of your files. Use at your own risk!
+
 A spreadsheet-style editor for tabular data, driven by a `data-dict.yaml` dictionary. You open a **Parquet**
 file together with its **`data-dict.yaml`** dictionary; the dictionary is the single
 source of truth that drives the grid columns, per-cell validation, and the on-disk
